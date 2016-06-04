@@ -2,213 +2,209 @@
 
 class ProductsController extends AppController {
 
-    public $uses = array('Product', 'ProductToCategory', 'StockStatus', 'ProductDescription', 'Cart');
+    public $uses = array('Product', 'ProductToCategory', 'StockStatus', 'ProductDescription', 'Cart', 'CustomerWishlist');
 
-    public function get_all_products() {
-        $status = 0;
-        $errorMsg = '';
-        $data = [];
-        $order = 'Product.product_id ASC';
-        $this->Product->bindModel(array('belongsTo' => array('ProductDescription' => array('foreignKey' => FALSE, 'conditions' => array('ProductDescription.product_id = ProductDescription.product_id')))));
-        $this->Product->bindModel(array('belongsTo' => array('StockStatus' => array('foreignKey' => FALSE, 'conditions' => array('StockStatus.stock_status_id = Product.stock_status_id')))));
-        $product_data = $this->Product->find('all', array('recursive' => 2, 'order' => $order));
-
-        if (!empty($product_data)):
-            foreach ($product_data as $k => $pr_data):
-                $data[$k]['id'] = $pr_data['Product']['product_id'];
-                $data[$k]['name'] = $pr_data['ProductDescription']['name'];
-                $data[$k]['description'] = $pr_data['ProductDescription']['description'];
-                $data[$k]['quantity'] = $pr_data['Product']['quantity'];
-                $data[$k]['price'] = $pr_data['Product']['price'];
-                $data[$k]['sku'] = $pr_data['Product']['sku'];
-                $data[$k]['image'] = $pr_data['Product']['image'];
-                $data[$k]['minimum'] = $pr_data['Product']['minimum'];
-                $data[$k]['shipping'] = $pr_data['Product']['shipping'];
-                $data[$k]['stock_status'] = $pr_data['StockStatus']['name'];
-            endforeach;
-        endif;
-
-        $this->set(compact('status', 'errorMsg', 'data'));
-        $this->set('_serialize', array('status', 'errorMsg', 'data'));
-    }
-
-    public function get_category_products() {
-        $category_array = array('18');
+    public function get_products() {
         $status = 0;
         $errorMsg = '';
         $data = [];
         $conditions = [];
-        //$conditions[] = array('ProductToCategory.category_id' => $category_array);
-        $order = 'Product.product_id ASC';
+        $order = [];
+        if ($this->request->is(array('post', 'get'))):
+            if (!empty($_REQUEST['category_id'])):
+                $cat_product = $this->ProductToCategory->find('list', array('fields' => array('ProductToCategory.product_id'), 'conditions' => array('ProductToCategory.category_id' => $_REQUEST['category_id'])));
+                $conditions[] = array('Product.product_id' => $cat_product);
+            endif;
 
-        $this->Product->bindModel(array(
-            'belongsTo' => array(
-                'StockStatus' => array('foreignKey' => FALSE, 'conditions' => array('StockStatus.stock_status_id = Product.stock_status_id')),
-                'ProductDescription' => array('foreignKey' => FALSE, 'conditions' => array('ProductDescription.product_id = Product.product_id')),
-            ),
-            'hasMany' => array(
-                'ProductToCategory' => array('foreignKey' => FALSE, 'conditions' => array('ProductToCategory.product_id = Product.product_id')),
-            )
-        ));
-        $product_data = $this->Product->find('all', array('recursive' => 2, 'conditions' => $conditions, 'order' => $order));
+            if (!empty($_REQUEST['product_tags'])):
+                $tags = explode(',', $_REQUEST['product_tags']);
+                foreach ($tags as $tag):
+                    $product = $this->ProductDescription->find('list', array('fields' => array('ProductDescription.product_id'), 'conditions' => array('ProductDescription.tag regexp ' => '[[:<:]]' . $tag . '[[:>:]]')));
+                    $conditions[] = array('Product.product_id' => $product);
+                endforeach;
+            endif;
 
-        if (!empty($product_data)):
-            foreach ($product_data as $k => $pr_data):
-                $data[$k]['id'] = $pr_data['Product']['product_id'];
-                $data[$k]['name'] = $pr_data['ProductDescription']['name'];
-                $data[$k]['description'] = $pr_data['ProductDescription']['description'];
-                $data[$k]['quantity'] = $pr_data['Product']['quantity'];
-                $data[$k]['price'] = $pr_data['Product']['price'];
-                $data[$k]['sku'] = $pr_data['Product']['sku'];
-                $data[$k]['image'] = $pr_data['Product']['image'];
-                $data[$k]['minimum'] = $pr_data['Product']['minimum'];
-                $data[$k]['shipping'] = $pr_data['Product']['shipping'];
-                $data[$k]['stock_status'] = $pr_data['StockStatus']['name'];
-            endforeach;
+            if (!empty($_REQUEST['status'])):
+                //for site
+                //5 SOLD OUT
+                //6 2 - 3 Days
+                //7 In Stock
+                //8 PREORDER        
+                $conditions[] = array('Product.stock_status_id' => $_REQUEST['status']);
+            endif;
+
+            if (!empty($_REQUEST['price_low'])):
+                $conditions[] = array('Product.price >=' => $_REQUEST['price_low']);
+            endif;
+
+            if (!empty($_REQUEST['price_high'])):
+                $conditions[] = array('Product.price <=' => $_REQUEST['price_high']);
+            endif;
+
+            if (empty($order)):
+                $order = 'Product.product_id ASC';
+            endif;
+            $this->Product->bindModel(array(
+                'belongsTo' => array(
+                    'StockStatus' => array('foreignKey' => FALSE, 'conditions' => array('StockStatus.stock_status_id = Product.stock_status_id')),
+                    'ProductDescription' => array('foreignKey' => FALSE, 'conditions' => array('ProductDescription.product_id = Product.product_id')),
+                )
+            ));
+
+            $product_data = $this->Product->find('all', array('recursive' => 2, 'conditions' => $conditions, 'order' => $order, 'group' => 'Product.product_id'));
+            $min_price = 0;
+            $max_price = 0;
+            if (!empty($product_data)):
+                $status = 1;
+                foreach ($product_data as $k => $pr_data):
+                    if ($k == 0):
+                        $min_price = $pr_data['Product']['price'];
+                        $max_price = $pr_data['Product']['price'];
+                    endif;
+
+                    $min_price = min($pr_data['Product']['price'], $min_price);
+                    $max_price = max($pr_data['Product']['price'], $max_price);
+
+                    $data[$k]['id'] = $pr_data['Product']['product_id'];
+                    $data[$k]['name'] = $pr_data['ProductDescription']['name'];
+                    $data[$k]['description'] = $pr_data['ProductDescription']['description'];
+                    $data[$k]['quantity'] = $pr_data['Product']['quantity'];
+                    $data[$k]['price'] = $pr_data['Product']['price'];
+                    $data[$k]['sku'] = $pr_data['Product']['sku'];
+                    $data[$k]['model'] = $pr_data['Product']['model'];
+                    $data[$k]['viewed'] = $pr_data['Product']['viewed'];
+                    $data[$k]['image'] = $pr_data['Product']['image'];
+                    $data[$k]['minimum'] = $pr_data['Product']['minimum'];
+                    $data[$k]['shipping'] = $pr_data['Product']['shipping'];
+                    $data[$k]['stock_status'] = $pr_data['StockStatus']['name'];
+                endforeach;
+            endif;
+
+            $min_price = number_format($min_price, 2);
+            $max_price = number_format($max_price, 2);
+            $total_products = count($product_data);
+        endif;
+        $this->set(compact('status', 'errorMsg', 'min_price', 'max_price', 'total_products', 'data'));
+        $this->set('_serialize', array('status', 'errorMsg', 'min_price', 'max_price', 'total_products', 'data'));
+    }
+
+        public function product_detail() {
+        $status = 0;
+        $errorMsg = '';
+        if ($this->request->is(array('get', 'post'))):
+            if (!empty($_REQUEST['product_id'])):
+                $product_id = $_REQUEST['product_id'];
+
+                $this->ProductToCategory->bindModel(
+                        array(
+                            'belongsTo' => array('CategoryDescription' => array('foreignKey' => 'category_id'))
+                        )
+                );
+
+                $this->Product->bindModel(array(
+                    'belongsTo' => array(
+                        'StockStatus' => array('foreignKey' => FALSE, 'conditions' => array('StockStatus.stock_status_id = Product.stock_status_id')),
+                        'ProductDescription' => array('foreignKey' => FALSE, 'conditions' => array('ProductDescription.product_id = Product.product_id')),
+                    ),
+                    'hasMany' => array(
+                        'ProductToCategory' => array('foriegnKey' => 'product_id')
+                    ),
+                ));
+                $product_data = $this->Product->find('first', array('recursive' => 2, 'conditions' => array('Product.product_id' => $product_id)));
+                if (!empty($product_data)):
+                    $status = 1;
+                    $data['id'] = $product_data['Product']['product_id'];
+                    $data['name'] = $product_data['ProductDescription']['name'];
+                    $data['description'] = $product_data['ProductDescription']['description'];
+                    $data['quantity'] = $product_data['Product']['quantity'];
+                    $data['price'] = $product_data['Product']['price'];
+                    $data['sku'] = $product_data['Product']['sku'];
+                    $data['model'] = $product_data['Product']['model'];
+                    $data['viewed'] = $product_data['Product']['viewed'];
+                    $data['image'] = $product_data['Product']['image'];
+                    $data['minimum'] = $product_data['Product']['minimum'];
+                    $data['shipping'] = $product_data['Product']['shipping'];
+                    $data['stock_status'] = $product_data['StockStatus']['name'];
+                    foreach ($product_data['ProductToCategory'] as $k => $cat):
+                        $cat_data[$k]['id'] = $cat['CategoryDescription']['category_id'];
+                        $cat_data[$k]['name'] = $cat['CategoryDescription']['name'];
+                        $cat_data[$k]['description'] = $cat['CategoryDescription']['description'];
+                    endforeach;
+                    $data['category'] = $cat_data;
+//                $cat = $this->ProductToCategory->find('all', array('conditions' => array('ProductToCategory.product_id' => $product_data['Product']['product_id'])));
+                else:
+                    $status = 0;
+                    $errorMsg = 'No product found';
+                endif;
+            else:
+                $status = 2;
+                $errorMsg = 'Please add product id';
+            endif;
         endif;
 
         $this->set(compact('status', 'errorMsg', 'data'));
         $this->set('_serialize', array('status', 'errorMsg', 'data'));
     }
     
-    public function get_products() {
-        $category_array = array('18');
+    public function manage_cart() {
         $status = 0;
         $errorMsg = '';
-        $data = [];
-        $conditions = [];
-        $order = [];
-        
-        if(!empty($_REQUEST['price_low'])):
-            $conditions[] = array('Product.price >=' => $_REQUEST['price_low']);
-        endif;
-        
-        if(!empty($_REQUEST['price_high'])):
-            $conditions[] = array('Product.price <=' => $_REQUEST['price_high']);
-        endif;
-        //$conditions[] = array('ProductToCategory.category_id' => $category_array);
-        
-        if(empty($order)):
-            $order = 'Product.product_id ASC';
-        endif;
-        $this->Product->bindModel(array(
-            'belongsTo' => array(
-                'StockStatus' => array('foreignKey' => FALSE, 'conditions' => array('StockStatus.stock_status_id = Product.stock_status_id')),
-                'ProductDescription' => array('foreignKey' => FALSE, 'conditions' => array('ProductDescription.product_id = Product.product_id')),
-            ),
-//            'hasMany' => array(
-//                'ProductToCategory' => array('foreignKey' => FALSE, 'conditions' => array('ProductToCategory.product_id = Product.product_id')),
-//            )
-        ));
-        $product_data = $this->Product->find('all', array('recursive' => 2, 'conditions' => $conditions, 'order' => $order));
-
-        if (!empty($product_data)):
-            foreach ($product_data as $k => $pr_data):
-                $data[$k]['id'] = $pr_data['Product']['product_id'];
-                $data[$k]['name'] = $pr_data['ProductDescription']['name'];
-                $data[$k]['description'] = $pr_data['ProductDescription']['description'];
-                $data[$k]['quantity'] = $pr_data['Product']['quantity'];
-                $data[$k]['price'] = $pr_data['Product']['price'];
-                $data[$k]['sku'] = $pr_data['Product']['sku'];
-                $data[$k]['image'] = $pr_data['Product']['image'];
-                $data[$k]['minimum'] = $pr_data['Product']['minimum'];
-                $data[$k]['shipping'] = $pr_data['Product']['shipping'];
-                $data[$k]['stock_status'] = $pr_data['StockStatus']['name'];
-            endforeach;
-        endif;
-        pr($data);
-        die;
-        $this->set(compact('status', 'errorMsg', 'data'));
-        $this->set('_serialize', array('status', 'errorMsg', 'data'));
-    }
-
-    public function get_product($product_id) {
-        $status = 0;
-        $errorMsg = '';
-        if (!empty($product_id)):
-            $data = [];
-            $conditions = array('Product.product_id' => $product_id);
-            $this->Product->bindModel(array('belongsTo' => array('ProductDescription' => array('foreignKey' => FALSE, 'conditions' => array('ProductDescription.product_id = ProductDescription.product_id')))));
-            $this->Product->bindModel(array('belongsTo' => array('StockStatus' => array('foreignKey' => FALSE, 'conditions' => array('StockStatus.stock_status_id = Product.stock_status_id')))));
-            $product_data = $this->Product->find('first', array('recursive' => 2, 'conditions' => $conditions));
-            if (!empty($product_data)):
-                $data['id'] = $product_data['Product']['product_id'];
-                $data['name'] = $product_data['ProductDescription']['name'];
-                $data['description'] = $product_data['ProductDescription']['description'];
-                $data['quantity'] = $product_data['Product']['quantity'];
-                $data['price'] = $product_data['Product']['price'];
-                $data['sku'] = $product_data['Product']['sku'];
-                $data['image'] = $product_data['Product']['image'];
-                $data['minimum'] = $product_data['Product']['minimum'];
-                $data['shipping'] = $product_data['Product']['shipping'];
-                $data['stock_status'] = $product_data['StockStatus']['name'];
-            else:
-                $status = 0;
-                $errorMsg = 'No Product Found';
-            endif;
-        else:
-            $status = 0;
-            $errorMsg = 'Please provide product id';
-        endif;
-        $this->set(compact('status', 'errorMsg', 'data'));
-        $this->set('_serialize', array('status', 'errorMsg', 'data'));
-    }
-
-    public function add_to_cart() {
-        $status = 0;
-        $errorMsg = '';
-        $cart['customer_id'] = $_REQUEST['customer_id'];
-        $cart['session_id'] = $_REQUEST['session_id'];
-        $cart['product_id'] = $_REQUEST['product_id'];
-        $cart['quantity'] = $_REQUEST['product_quantity'];
-        $product = $this->Product->findById($cart['product_id']);
-        if (empty($product) || $product['Product']['quantity'] > $cart['quantity']):
-            $status = 2;
-            $errorMsg = 'Product quanitity is more then available ';
-        else:
-            $this->Cart->set($cart);
-            $success = $this->Cart->save($cart);
-            if ($success):
-                $status = 1;
-                $errorMsg = 'Product added sucessfully to cart';
-            else:
-                $status = 0;
-                $errorMsg = 'Product not added sucessfully to cart';
-            endif;
-        endif;
-        $this->set(compact('status', 'errorMsg', 'data'));
-        $this->set('_serialize', array('status', 'errorMsg', 'data'));
-    }
-
-    public function edit_cart() {
-        $status = 0;
-        $errorMsg = '';
-        $cart['customer_id'] = $_REQUEST['customer_id'];
-        $cart['session_id'] = $_REQUEST['session_id'];
-        $cart['product_id'] = $_REQUEST['product_id'];
-        $cart['quantity'] = $_REQUEST['product_quantity'];
-        
-        $product = $this->Product->findById($cart['product_id']);
-        if (empty($product) || $product['Product']['quantity'] > $cart['quantity']):
-            $status = 2;
-            $errorMsg = 'Product quanitity is more then available ';
-        else:
-            $cart_data = $this->Cart->find('first', array('conditions' => array('customer_id' => $cart['customer_id'], 'session_id' => $cart['session_id'], 'product_id' => $cart['product_id'])));
-            if (!empty($cart_data)):
-                $success = $this->Cart->updateAll(array('quantity' => $cart['quantity']), array('cart_id' => $cart_data['Cart']['cart_id']));
-                if ($success):
-                    $status = 1;
-                    $errorMsg = 'Cart updated successfully';
-                else:
-                    $status = 0;
-                    $errorMsg = 'Cart not updated successfully';
-                endif;
-            else:
+        if ($this->request->is(array('post', 'get'))):
+            if (empty($_REQUEST['customer_id']) || empty($_REQUEST['session_id'])):
                 $status = 2;
-                $errorMsg = 'No item found in cart';
+                $errorMsg = 'Parameter missing';
+            else:
+                if (!empty($_REQUEST['product_id']) && !empty($_REQUEST['product_quantity'])):
+                    $cart['customer_id'] = $_REQUEST['customer_id'];
+                    $cart['session_id'] = $_REQUEST['session_id'];
+                    $cart['product_id'] = $_REQUEST['product_id'];
+                    $cart['quantity'] = $_REQUEST['product_quantity'];
+                    $product = $this->Product->findByProductId($cart['product_id']);
+                    if (empty($product) || $cart['quantity'] > $product['Product']['quantity']):
+                        $status = 2;
+                        $errorMsg = 'Product quanitity is more then available ';
+                    else:
+                        $cart_data = $this->Cart->find('first', array('conditions' => array('Cart.customer_id' => $cart['customer_id'], 'Cart.session_id' => $cart['session_id'], 'Cart.product_id' => $cart['product_id'])));
+                        if (!empty($cart_data)):
+                            $success = $this->Cart->updateAll(array('quantity' => $cart['quantity']), array('cart_id' => $cart_data['Cart']['cart_id']));
+                            if ($success):
+                                $status = 1;
+                                $errorMsg = 'Product updated sucessfully to cart';
+                            else:
+                                $status = 0;
+                                $errorMsg = 'Product not updated sucessfully to cart';
+                            endif;
+                        else:
+                            $this->Cart->set($cart);
+                            $success = $this->Cart->save($cart);
+                            if ($success):
+                                $status = 1;
+                                $errorMsg = 'Product added sucessfully to cart';
+                            else:
+                                $status = 0;
+                                $errorMsg = 'Product not added sucessfully to cart';
+                            endif;
+                        endif;
+                    endif;
+                endif;
+                $this->Product->bindModel(array('belongsTo' => array('ProductDescription' => array('foriegnKey' => 'ProductDescription.product_id'))));
+                $this->Cart->bindModel(array('belongsTo' => array('Product' => array('foriegnKey' => 'product_id'))));
+                $cart_product_data = $this->Cart->find('all', array('recursive' => 1, 'conditions' => array('Cart.customer_id' => $_REQUEST['customer_id'], 'Cart.session_id' => $_REQUEST['session_id'])));
+                //pr($cart_product_data);
+                if (!empty($cart_product_data)):
+                    foreach ($cart_product_data as $k => $c_data):
+                        $product_description = $this->ProductDescription->find('first', array('conditions' => array('ProductDescription.product_id' => $c_data['Cart']['product_id'])));
+                        $data[$k]['product_id'] = $c_data['Cart']['product_id'];
+                        $data[$k]['product_image'] = $c_data['Product']['image'];
+                        $data[$k]['product_price'] = number_format($c_data['Product']['price'], 2);
+                        $data[$k]['product_name'] = $product_description['ProductDescription']['name'];
+                        $data[$k]['quantity'] = $c_data['Cart']['quantity'];
+                    endforeach;
+                else:
+                    $errorMsg = 'No product found in cart';
+                endif;
             endif;
         endif;
-
         $this->set(compact('status', 'errorMsg', 'data'));
         $this->set('_serialize', array('status', 'errorMsg', 'data'));
     }

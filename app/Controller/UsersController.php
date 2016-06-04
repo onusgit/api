@@ -64,7 +64,7 @@ class UsersController extends AppController {
             $customer['Customer']['salt'] = $salt;
             $customer['Customer']['password'] = sha1($salt . sha1($salt . sha1($password)));
             $customer['Customer']['customer_group_id'] = Configure::read('customer_group_id');
-            $customer['Customer']['date_added'] = date('YYYY-mm-dd');
+            $customer['Customer']['date_added'] = date('Y-m-d H:m:s');
             $this->Customer->set($customer);
             $success = $this->Customer->save($customer);
 
