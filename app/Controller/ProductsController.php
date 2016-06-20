@@ -50,47 +50,47 @@ class ProductsController extends AppController {
                     'ProductDescription' => array('foreignKey' => FALSE, 'conditions' => array('ProductDescription.product_id = Product.product_id')),
                 )
             ));
+            $page = isset($this->request->query['page']) ? $this->request->query['page'] : 0;
+            $limit = 10;
+            $offset = ($page) * $limit;
+            $product_data = $this->Product->find('all', array('recursive' => 2, 'conditions' => $conditions, 'order' => $order, 'limit' => $limit, 'offset' => $offset, 'group' => 'Product.product_id'));
 
-            $product_data = $this->Product->find('all', array('recursive' => 2, 'conditions' => $conditions, 'order' => $order, 'group' => 'Product.product_id'));
-            $min_price = 0;
-            $max_price = 0;
+            $min_max_total = $this->Product->find('first', array('conditions' => $conditions, 'fields' => array('MIN(Product.price) AS min_price', 'MAX(Product.price) AS max_price', 'COUNT(Product.product_id) AS total_product'), 'group by' => 'Product.product_id', 'order' => $order));
             if (!empty($product_data)):
                 $status = 1;
                 foreach ($product_data as $k => $pr_data):
-                    if ($k == 0):
-                        $min_price = $pr_data['Product']['price'];
-                        $max_price = $pr_data['Product']['price'];
-                    endif;
-
-                    $min_price = min($pr_data['Product']['price'], $min_price);
-                    $max_price = max($pr_data['Product']['price'], $max_price);
-
                     $data[$k]['id'] = $pr_data['Product']['product_id'];
                     $data[$k]['name'] = $pr_data['ProductDescription']['name'];
-                    $data[$k]['description'] = $pr_data['ProductDescription']['description'];
+                    $data[$k]['description'] = html_entity_decode($pr_data['ProductDescription']['description']);
                     $data[$k]['quantity'] = $pr_data['Product']['quantity'];
                     $data[$k]['price'] = $pr_data['Product']['price'];
                     $data[$k]['sku'] = $pr_data['Product']['sku'];
                     $data[$k]['model'] = $pr_data['Product']['model'];
                     $data[$k]['viewed'] = $pr_data['Product']['viewed'];
-                    $data[$k]['image'] = $pr_data['Product']['image'];
+                    if (!empty($pr_data['Product']['image'])):
+                        $data[$k]['image'] = FULL_BASE_URL . '/image/' . $pr_data['Product']['image'];
+                    else:
+                        $data[$k]['image'] = '';
+                    endif;
                     $data[$k]['minimum'] = $pr_data['Product']['minimum'];
                     $data[$k]['shipping'] = $pr_data['Product']['shipping'];
                     $data[$k]['stock_status'] = $pr_data['StockStatus']['name'];
                 endforeach;
             endif;
 
-            $min_price = number_format($min_price, 2);
-            $max_price = number_format($max_price, 2);
-            $total_products = count($product_data);
+            $min_price = number_format($min_max_total[0]['min_price'], 2);
+            $max_price = number_format($min_max_total[0]['max_price'], 2);
+            $total_products = $min_max_total[0]['total_product'];
+            $total_page = floor($total_products / $limit);
         endif;
-        $this->set(compact('status', 'errorMsg', 'min_price', 'max_price', 'total_products', 'data'));
-        $this->set('_serialize', array('status', 'errorMsg', 'min_price', 'max_price', 'total_products', 'data'));
+        $this->set(compact('status', 'errorMsg', 'min_price', 'max_price', 'total_products', 'total_page', 'data'));
+        $this->set('_serialize', array('status', 'errorMsg', 'min_price', 'max_price', 'total_products', 'total_page', 'data'));
     }
 
-        public function product_detail() {
+    public function product_detail() {
         $status = 0;
         $errorMsg = '';
+        $data = array();
         if ($this->request->is(array('get', 'post'))):
             if (!empty($_REQUEST['product_id'])):
                 $product_id = $_REQUEST['product_id'];
@@ -121,7 +121,11 @@ class ProductsController extends AppController {
                     $data['sku'] = $product_data['Product']['sku'];
                     $data['model'] = $product_data['Product']['model'];
                     $data['viewed'] = $product_data['Product']['viewed'];
-                    $data['image'] = $product_data['Product']['image'];
+                    if (!empty($product_data['Product']['image'])):
+                        $data['image'] = FULL_BASE_URL . '/image/' . $product_data['Product']['image'];
+                    else:
+                        $data['image'] = '';
+                    endif;
                     $data['minimum'] = $product_data['Product']['minimum'];
                     $data['shipping'] = $product_data['Product']['shipping'];
                     $data['stock_status'] = $product_data['StockStatus']['name'];
@@ -145,16 +149,24 @@ class ProductsController extends AppController {
         $this->set(compact('status', 'errorMsg', 'data'));
         $this->set('_serialize', array('status', 'errorMsg', 'data'));
     }
-    
+
     public function manage_cart() {
-        $status = 0;
+        $status = $total_item = $total_cost = 0;
         $errorMsg = '';
+        $data = array();
+        
         if ($this->request->is(array('post', 'get'))):
             if (empty($_REQUEST['customer_id']) || empty($_REQUEST['session_id'])):
                 $status = 2;
                 $errorMsg = 'Parameter missing';
-            else:
-                if (!empty($_REQUEST['product_id']) && !empty($_REQUEST['product_quantity'])):
+            else:                
+                if (!empty($_REQUEST['product_id']) && $_REQUEST['product_quantity'] == 0): 
+                    $cart_data = $this->Cart->find('first', array('conditions' => array('Cart.customer_id' => $_REQUEST['customer_id'], 'Cart.session_id' => $_REQUEST['session_id'], 'Cart.product_id' => $_REQUEST['product_id'])));
+                    if(!empty($cart_data)):                        
+                        $this->Cart->delete($cart_data['Cart']['cart_id']);                    
+                        $status = 3; // remove from cart
+                    endif;
+                elseif (!empty($_REQUEST['product_id']) && !empty($_REQUEST['product_quantity'])):
                     $cart['customer_id'] = $_REQUEST['customer_id'];
                     $cart['session_id'] = $_REQUEST['session_id'];
                     $cart['product_id'] = $_REQUEST['product_id'];
@@ -192,11 +204,15 @@ class ProductsController extends AppController {
                 $cart_product_data = $this->Cart->find('all', array('recursive' => 1, 'conditions' => array('Cart.customer_id' => $_REQUEST['customer_id'], 'Cart.session_id' => $_REQUEST['session_id'])));
                 //pr($cart_product_data);
                 if (!empty($cart_product_data)):
+                    if($status != 3):
+                        $status = 1;
+                    endif;                    
                     foreach ($cart_product_data as $k => $c_data):
                         $product_description = $this->ProductDescription->find('first', array('conditions' => array('ProductDescription.product_id' => $c_data['Cart']['product_id'])));
                         $data[$k]['product_id'] = $c_data['Cart']['product_id'];
-                        $data[$k]['product_image'] = $c_data['Product']['image'];
+                        $data[$k]['product_image'] = FULL_BASE_URL . '/image/' .$c_data['Product']['image'];
                         $data[$k]['product_price'] = number_format($c_data['Product']['price'], 2);
+                        $total_cost += $c_data['Product']['price'];
                         $data[$k]['product_name'] = $product_description['ProductDescription']['name'];
                         $data[$k]['quantity'] = $c_data['Cart']['quantity'];
                     endforeach;
@@ -205,8 +221,14 @@ class ProductsController extends AppController {
                 endif;
             endif;
         endif;
-        $this->set(compact('status', 'errorMsg', 'data'));
-        $this->set('_serialize', array('status', 'errorMsg', 'data'));
+        if(!empty($data)):            
+            $total_item = count($data);
+            $total_cost = number_format($total_cost, 2);
+        else:
+            $status = 0;
+        endif;
+        $this->set(compact('status', 'errorMsg', 'total_item', 'total_cost', 'data'));
+        $this->set('_serialize', array('status', 'errorMsg', 'total_item', 'total_cost', 'data'));
     }
 
 }

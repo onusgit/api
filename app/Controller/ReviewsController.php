@@ -7,6 +7,7 @@ class ReviewsController extends AppController {
     public function get_product_reviews() {
         $status = 0;
         $errorMsg = '';
+        $data = array();
         if ($this->request->is(array('get', 'post'))):
             if (!empty($_REQUEST['product_id'])):
                 $reviews = $this->Review->find('all', array('conditions' => array('Review.product_id' => $_REQUEST['product_id'])));
@@ -16,7 +17,7 @@ class ReviewsController extends AppController {
                         $data[$k]['author'] = $review_data['Review']['author'];
                         $data[$k]['text'] = $review_data['Review']['text'];
                         $data[$k]['rating'] = $review_data['Review']['rating'];
-                        $data[$k]['date_added'] = $review_data['Review']['date_added'];
+                        $data[$k]['date_added'] =  $this->time_elapsed_string(strtotime($review_data['Review']['date_added']));
                     endforeach;
                     $status = 1;
                 else:
@@ -25,7 +26,7 @@ class ReviewsController extends AppController {
                 endif;
             else:
                 $status = 2;
-                $errorMsg = 'Please give peoduct id';
+                $errorMsg = 'Please give product id';
             endif;
         endif;
         $this->set(compact('status', 'errorMsg', 'data'));

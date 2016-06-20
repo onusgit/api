@@ -67,7 +67,6 @@ class UsersController extends AppController {
             $customer['Customer']['date_added'] = date('Y-m-d H:m:s');
             $this->Customer->set($customer);
             $success = $this->Customer->save($customer);
-
             if ($success):
                 $status = 1;
                 $errorMsg = 'Registration successfull';
