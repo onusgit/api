@@ -216,7 +216,7 @@ class ProductsController extends AppController {
                         $data[$k]['product_id'] = $c_data['Cart']['product_id'];
                         $data[$k]['product_image'] = FULL_BASE_URL . '/image/' .$c_data['Product']['image'];
                         $data[$k]['product_price'] = number_format($c_data['Product']['price'], 2);
-                        $total_cost += $c_data['Product']['price'];
+                        $total_cost += $c_data['Product']['price'] * $c_data['Cart']['quantity'];
                         $data[$k]['product_name'] = $product_description['ProductDescription']['name'];
                         $data[$k]['quantity'] = $c_data['Cart']['quantity'];
                     endforeach;
