@@ -29,8 +29,9 @@ class ProductsController extends AppController {
                 //5 SOLD OUT
                 //6 2 - 3 Days
                 //7 In Stock
-                //8 PREORDER        
-                $conditions[] = array('Product.stock_status_id' => $_REQUEST['status']);
+                //8 PREORDER    
+                $stock_status = explode(',', $_REQUEST['status']);
+                $conditions[] = array('Product.stock_status_id' => $stock_status);
             endif;
 
             if (!empty($_REQUEST['price_low'])):
@@ -55,7 +56,8 @@ class ProductsController extends AppController {
             $offset = ($page) * $limit;
             $product_data = $this->Product->find('all', array('recursive' => 2, 'conditions' => $conditions, 'order' => $order, 'limit' => $limit, 'offset' => $offset, 'group' => 'Product.product_id'));
 
-            $min_max_total = $this->Product->find('first', array('conditions' => $conditions, 'fields' => array('MIN(Product.price) AS min_price', 'MAX(Product.price) AS max_price', 'COUNT(Product.product_id) AS total_product'), 'group by' => 'Product.product_id', 'order' => $order));
+            $total_product = $this->Product->find('first', array('conditions' => $conditions, 'fields' => array('COUNT(Product.product_id) AS total_product'), 'group by' => 'Product.product_id', 'order' => $order));
+            $min_max_total = $this->Product->find('first', array('conditions' => array('Product.product_id' => $cat_product), 'fields' => array('MIN(Product.price) AS min_price', 'MAX(Product.price) AS max_price'), 'group by' => 'Product.product_id', 'order' => $order));
             if (!empty($product_data)):
                 $status = 1;
                 foreach ($product_data as $k => $pr_data):
@@ -80,11 +82,13 @@ class ProductsController extends AppController {
 
             $min_price = number_format($min_max_total[0]['min_price'], 2);
             $max_price = number_format($min_max_total[0]['max_price'], 2);
-            $total_products = $min_max_total[0]['total_product'];
+            $total_products = $total_product[0]['total_product'];
             $total_page = floor($total_products / $limit);
+            $availability = array('7,In Stock', '5,Out of Stock');
+            $tags = array('sweets','bhusu');
         endif;
-        $this->set(compact('status', 'errorMsg', 'min_price', 'max_price', 'total_products', 'total_page', 'data'));
-        $this->set('_serialize', array('status', 'errorMsg', 'min_price', 'max_price', 'total_products', 'total_page', 'data'));
+        $this->set(compact('status', 'errorMsg', 'min_price', 'max_price', 'total_products', 'total_page', 'data', 'tags', 'availability'));
+        $this->set('_serialize', array('status', 'errorMsg', 'min_price', 'max_price', 'tags', 'availability', 'total_products', 'total_page', 'data'));
     }
 
     public function product_detail() {

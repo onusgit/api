@@ -5,7 +5,7 @@ class WishListsController extends AppController {
     public $uses = array('CustomerWishlist', 'ProductDescription', 'Product', 'ProductToCategory');
 
     public function manage_wishlist() {
-        $status = 0;
+        $status = 1;
         $errorMsg = '';
         $data = array();
         if ($this->request->is(array('get', 'post'))):
@@ -20,22 +20,14 @@ class WishListsController extends AppController {
                     if (!empty($customer_wishlist)):                              
 //                        $success = $this->CustomerWishlist->deleteAll(array('customer_ids' => $customer_id, 'product_id' => $product_id));
                         $success =$this->CustomerWishlist->query("DELETE FROM  `ocjn_customer_wishlist` WHERE  `customer_id` = ".$customer_id." &&  `product_id` =".$product_id);
-                        if ($success):                            
-                            $errorMsg = 'Product removed from wishlist successfully';
-                        else:                           
-                            $errorMsg = 'Product not removed from wishlist successfully';
-                        endif;
-                        $status = 3;
+                        $errorMsg = 'This product removed from your wish list!';                         
+                        $status = 4;
                     else:
                         $add_data['customer_id'] = $customer_id;
                         $add_data['product_id'] = $product_id;
                         $this->CustomerWishlist->create();
                         $success = $this->CustomerWishlist->save($add_data, false);
-                        if ($success):                            
-                            $errorMsg = 'Product added to wishlist successfully';
-                        else:                            
-                            $errorMsg = 'Product not added to wishlist successfully';
-                        endif;
+                        $errorMsg = 'This product added to your wish list!'; 
                         $status = 3;
                     endif;
                 endif;
@@ -56,10 +48,7 @@ class WishListsController extends AppController {
                 ));
                 $product_data = $this->Product->find('all', array('recursive' => 2, 'conditions' => array('Product.product_id' => $product_arr), 'group' => 'Product.product_id'));
                
-                if (!empty($product_data)):  
-                    if($status != 3):
-                        $status = 1;
-                    endif;
+                if (!empty($product_data)):                      
                     foreach ($product_data as $k => $c_data):                        
                         $data[$k]['id'] = $c_data['Product']['product_id'];
                         $data[$k]['name'] = $c_data['ProductDescription']['name'];

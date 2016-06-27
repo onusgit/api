@@ -4,7 +4,7 @@ App::import('Controller', 'Products');
 
 class HomesController extends AppController {
 
-    public $uses = array('Journal2Module', 'Category', 'Product', 'ProductToCategory', 'StockStatus', 'ProductDescription', 'Cart', 'CustomerWishlist');
+    public $uses = array('Journal2Module', 'Category', 'Country', 'Zone', 'Product', 'ProductToCategory', 'StockStatus', 'ProductDescription', 'Cart', 'CustomerWishlist');
 
     public function index() {
         $status = 0;
@@ -99,4 +99,29 @@ class HomesController extends AppController {
         $this->set('_serialize', array('status', 'errorMsg', 'data'));
     }
 
+    public function get_countries() {
+        $status = 0;
+        $errorMsg = '';
+        $data = array();
+        $country = $this->Country->find('all', array('conditions' => array('status' => '1')));
+        if(!empty($country)):
+            foreach ($country as $k => $c):
+                $data[$k]['country_id'] = $c['Country']['country_id'];
+                $data[$k]['name'] = $c['Country']['name'];
+                $zone = $this->Zone->find('all', array('conditions' => array('country_id' => $c['Country']['country_id'])));
+                if(!empty($zone)):
+                    foreach ($zone as $kz => $z):
+                        $data[$k]['zone'][$kz]['zone_id'] = $z['Zone']['zone_id'];
+                        $data[$k]['zone'][$kz]['name'] = $z['Zone']['name'];                    
+                    endforeach;
+                endif;
+            endforeach;
+        endif;
+        if (!empty($data)):
+            $status = 1;
+            $errorMsg = 'success';
+        endif;
+        $this->set(compact('status', 'errorMsg', 'data'));
+        $this->set('_serialize', array('status', 'errorMsg', 'data'));
+    }
 }
