@@ -133,21 +133,23 @@ class OrdersController extends AppController {
             endif;
             if (!empty($data)):
                 $total_item = count($data);
-                $total_cost = number_format($total_cost, 2);
-                $after_total_cost = $total_cost;
+                $total_cost = round($total_cost, 2);
+                $after_total_cost = 0;
+                $discount_amount = 0;             
                 if ($coupon_query['Coupon']['type'] == 'P'):
-                    $discount_amount = ($total_cost * (int) $coupon_query['Coupon']['discount']) / 100;
+                    $discount_amount = ($total_cost * (int) $coupon_query['Coupon']['discount'])  / 100;
+                    //$discount_amount = (int) $discount_amount / 100;
                 else:
                     $discount_amount = $coupon_query['Coupon']['discount'];
                 endif;
-                $after_total_cost = $total_cost - $discount_amount;
+                $after_discount_total_cost = $total_cost - (int) $discount_amount;
             else:
                 $status = 0;
             endif;
         endif;
 
-        $this->set(compact('status', 'errorMsg', 'data', 'total_item', 'total_cost', 'after_total_cost', 'discount_amount'));
-        $this->set('_serialize', array('status', 'errorMsg', 'data', 'total_item', 'total_cost', 'after_total_cost', 'discount_amount'));
+        $this->set(compact('status', 'errorMsg', 'data', 'total_item', 'total_cost', 'after_discount_total_cost', 'discount_amount'));
+        $this->set('_serialize', array('status', 'errorMsg', 'data', 'total_item', 'total_cost', 'after_discount_total_cost', 'discount_amount'));
     }
 
     public function use_gift_voucher() {
