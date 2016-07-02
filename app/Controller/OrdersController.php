@@ -2,7 +2,7 @@
 
 class OrdersController extends AppController {
 
-    public $uses = array('ZoneToGeoZone', 'Setting', 'Coupon', 'CouponHistory', 'Cart', 'Product', 'CouponProduct', 'CouponCategory', 'ProductToCategory', 'ProductDescription');
+    public $uses = array('Country', 'ZoneToGeoZone', 'Setting', 'Coupon', 'CouponHistory', 'Cart', 'Product', 'CouponProduct', 'CouponCategory', 'ProductToCategory', 'ProductDescription');
 
     public function apply_coupon() {
         $status = 1;
@@ -160,17 +160,27 @@ class OrdersController extends AppController {
         $status = 0;
         $errorMsg = '';
         $data = array();
-        $zones = $this->ZoneToGeoZone->find('first', array('conditions' => array('country_id' => $country_id)));
-        pr($zones);
+        $country = $this->Country->find('first', array('conditions' => array('country_id' => $country_id)));
+        $zones = $this->ZoneToGeoZone->find('first', array('conditions' => array('country_id' => $country_id)));  
         if (!empty($zones)):
-            $setting = $this->Setting->find('all', array('conditions' => array('key' => 'weight_' . $zones['ZoneToGeoZone']['geo_zone_id'] . '_status')));
-            pr($setting);
-            die;
+            $weight_rate = $this->Setting->find('first', array('conditions' => array('key' => 'weight_' . $zones['ZoneToGeoZone']['geo_zone_id'] . '_rate')));
+            $weight_status = $this->Setting->find('first', array('conditions' => array('key' => 'weight_' . $zones['ZoneToGeoZone']['geo_zone_id'] . '_status')));
+            if($weight_status['Setting']['value'] == 1):
+                $rate_str = explode(",", $weight_rate['Setting']['value']);                  
+                foreach ($rate_str as $rs):
+                    $rate = explode(":", $rs);
+                    if(isset($rate[0]) && $rate[0] == $weight):
+                        $data['Shipping_method']['weight.weight_'.$zones['ZoneToGeoZone']['geo_zone_id']] = $country['Country']['name']."(Weight:".$weight."g) - Rs.". $rate[1];
+                    endif;
+                endforeach;
+            else:
+                $data['Shipping_method']['free.free'] = 'Free Shipping - Rs.0.00';
+            endif;            
         endif;
         if (!empty($data)):
             $status = 1;
             $errorMsg = 'success';
-        endif;
+        endif;        
         $this->set(compact('status', 'errorMsg', 'data'));
         $this->set('_serialize', array('status', 'errorMsg', 'data'));
     }

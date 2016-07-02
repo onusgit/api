@@ -10,6 +10,7 @@ class ProductsController extends AppController {
         $data = [];
         $conditions = [];
         $order = [];
+        $cat_product = array();
         if ($this->request->is(array('post', 'get'))):
             if (!empty($_REQUEST['category_id'])):
                 $cat_product = $this->ProductToCategory->find('list', array('fields' => array('ProductToCategory.product_id'), 'conditions' => array('ProductToCategory.category_id' => $_REQUEST['category_id'])));
