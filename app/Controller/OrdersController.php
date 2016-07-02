@@ -2,7 +2,7 @@
 
 class OrdersController extends AppController {
 
-    public $uses = array('Country', 'ZoneToGeoZone', 'Setting', 'Coupon', 'CouponHistory', 'Cart', 'Product', 'CouponProduct', 'CouponCategory', 'ProductToCategory', 'ProductDescription');
+    public $uses = array('Country', 'ZoneToGeoZone', 'Setting', 'Coupon', 'CouponHistory', 'Cart', 'Product', 'CouponProduct', 'CouponCategory', 'ProductToCategory', 'ProductDescription', 'Currency', 'Customer', 'Order', 'OrderProduct');
 
     public function apply_coupon() {
         $status = 1;
@@ -135,10 +135,10 @@ class OrdersController extends AppController {
                 $total_item = count($data);
                 $total_cost = round($total_cost, 2);
                 $after_total_cost = 0;
-                $discount_amount = 0;             
+                $discount_amount = 0;
                 if ($coupon_query['Coupon']['type'] == 'P'):
-                    $discount_amount = ($total_cost * (int) $coupon_query['Coupon']['discount'])  / 100;
-                    //$discount_amount = (int) $discount_amount / 100;
+                    $discount_amount = ($total_cost * (int) $coupon_query['Coupon']['discount']) / 100;
+                //$discount_amount = (int) $discount_amount / 100;
                 else:
                     $discount_amount = $coupon_query['Coupon']['discount'];
                 endif;
@@ -161,26 +161,140 @@ class OrdersController extends AppController {
         $errorMsg = '';
         $data = array();
         $country = $this->Country->find('first', array('conditions' => array('country_id' => $country_id)));
-        $zones = $this->ZoneToGeoZone->find('first', array('conditions' => array('country_id' => $country_id)));  
+        $zones = $this->ZoneToGeoZone->find('first', array('conditions' => array('country_id' => $country_id)));
         if (!empty($zones)):
             $weight_rate = $this->Setting->find('first', array('conditions' => array('key' => 'weight_' . $zones['ZoneToGeoZone']['geo_zone_id'] . '_rate')));
             $weight_status = $this->Setting->find('first', array('conditions' => array('key' => 'weight_' . $zones['ZoneToGeoZone']['geo_zone_id'] . '_status')));
-            if($weight_status['Setting']['value'] == 1):
-                $rate_str = explode(",", $weight_rate['Setting']['value']);                  
+            if ($weight_status['Setting']['value'] == 1):
+                $rate_str = explode(",", $weight_rate['Setting']['value']);
                 foreach ($rate_str as $rs):
                     $rate = explode(":", $rs);
-                    if(isset($rate[0]) && $rate[0] == $weight):
-                        $data['Shipping_method']['weight.weight_'.$zones['ZoneToGeoZone']['geo_zone_id']] = $country['Country']['name']."(Weight:".$weight."g) - Rs.". $rate[1];
+                    if (isset($rate[0]) && $rate[0] == $weight):
+                        $data['Shipping_method']['weight.weight_' . $zones['ZoneToGeoZone']['geo_zone_id']] = $country['Country']['name'] . "(Weight:" . $weight . "g) - Rs." . $rate[1];
                     endif;
                 endforeach;
             else:
                 $data['Shipping_method']['free.free'] = 'Free Shipping - Rs.0.00';
-            endif;            
+            endif;
         endif;
         if (!empty($data)):
             $status = 1;
             $errorMsg = 'success';
-        endif;        
+        endif;
+        $this->set(compact('status', 'errorMsg', 'data'));
+        $this->set('_serialize', array('status', 'errorMsg', 'data'));
+    }
+
+    public function convert_currency() {
+        $status = 0;
+        $errorMsg = '';
+        $data = array();
+        if (!empty($_REQUEST['value']) || !empty($_REQUEST['from']) || !empty($_REQUEST['to'])):
+            $value = $_REQUEST['value'];
+            $from = $_REQUEST['from'];
+            $to = $_REQUEST['to'];
+            $from_val = $this->Currency->find('first', array('fields' => array('value'), 'conditions' => array('currency_id' => $from)));
+            $to_val = $this->Currency->find('first', array('fields' => array('value'), 'conditions' => array('currency_id' => $to)));
+            $converted_value = $value * ( $to_val['Currency']['value'] / $from_val['Currency']['value']);
+            $status = 1;
+            $errorMsg = 'Price converted successfully';
+            $data['price'] = $converted_value;
+        else:
+            $status = 2;
+            $errorMsg = 'Parameters are not sufficient';
+        endif;
+        $this->set(compact('status', 'errorMsg', 'data'));
+        $this->set('_serialize', array('status', 'errorMsg', 'data'));
+    }
+
+    public function place_order() {
+        $status = 0;
+        $errorMsg = '';
+        $data = array();
+        if (!empty($_REQUEST['customer_id']) || !empty($_REQUEST['session_id'])):
+            
+            $customer_data = $this->Customer->find('first', array( 'conditions' => array('customer_id' => $_REQUEST['customer_id'])));
+            
+            $this->Product->bindModel(array('belongsTo' => array('ProductDescription' => array('foriegnKey' => 'product_id'))));
+            $this->Cart->bindModel(array('belongsTo' => array('Product' => array('foriegnKey' => 'product_id'))));
+            $cart_data = $this->Cart->find('all', array('recursive' => 2 , 'conditions' => array('Cart.customer_id' => $_REQUEST['customer_id'], 'Cart.session_id' => $_REQUEST['session_id'])));
+            
+//            pr($cart_data);
+//            die;
+            
+            $order_data['invoice_no'] = 0; //need to make dynamic 
+            $order_data['invoice_prefix'] = 'INV-2016-00'; //need to make dynamic 
+            $order_data['store_id'] = '0'; //need to make dynamic 
+            $order_data['store_name'] = 'Snacks'; //need to make dynamic 
+            $order_data['store_url'] = 'http://mysnacky.com/'; //need to make dynamic 
+            $order_data['customer_id'] = $_REQUEST['customer_id'];
+            $order_data['customer_group_id'] = '1'; //need to make dynamic
+            $order_data['firstname'] = $customer_data['Customer']['firstname'];
+            $order_data['lastname'] = $customer_data['Customer']['lastname'];
+            $order_data['email'] = $customer_data['Customer']['email'];
+            $order_data['telephone'] = $customer_data['Customer']['telephone'];
+            
+            //payment field            
+            $order_data['payment_firstname'] = $_REQUEST['payment_firstname'];
+            $order_data['payment_lastname'] = $_REQUEST['payment_lastname'];
+            $order_data['payment_company'] = $_REQUEST['payment_company'];
+            $order_data['payment_address_1'] = $_REQUEST['payment_address_1'];
+            $order_data['payment_address_2'] = $_REQUEST['payment_address_2'];
+            $order_data['payment_city'] = $_REQUEST['payment_city'];
+            $order_data['payment_postcode'] = $_REQUEST['payment_postcode'];
+            $order_data['payment_country'] = $_REQUEST['payment_country'];
+            $order_data['payment_country_id'] = $_REQUEST['payment_country_id'];
+            $order_data['payment_zone'] = $_REQUEST['payment_zone'];
+            $order_data['payment_zone_id'] = $_REQUEST['payment_zone_id'];
+            $order_data['payment_method'] = $_REQUEST['payment_method'];
+            $order_data['payment_code'] = $_REQUEST['payment_code'];
+            
+            
+            //shipping field
+            $order_data['shipping_firstname'] = $_REQUEST['shipping_firstname'];
+            $order_data['shipping_lastname'] = $_REQUEST['shipping_lastname'];
+            $order_data['shipping_company'] = $_REQUEST['shipping_company'];
+            $order_data['shipping_address_1'] = $_REQUEST['shipping_address_1'];
+            $order_data['shipping_address_2'] = $_REQUEST['shipping_address_2'];
+            $order_data['shipping_city'] = $_REQUEST['shipping_city'];
+            $order_data['shipping_postcode'] = $_REQUEST['shipping_postcode'];
+            $order_data['shipping_country'] = $_REQUEST['shipping_country'];
+            $order_data['shipping_country_id'] = $_REQUEST['shipping_country_id'];
+            $order_data['shipping_zone'] = $_REQUEST['shipping_zone'];
+            $order_data['shipping_zone_id'] = $_REQUEST['shipping_zone_id'];
+            $order_data['shipping_method'] = $_REQUEST['shipping_method'];
+            $order_data['shipping_code'] = $_REQUEST['shipping_code'];
+            
+            //other field
+            $order_data['comment'] = $_REQUEST['comment'];
+            $order_data['total'] = $_REQUEST['total'];
+            $order_data['order_status_id'] = 5; //need to make dynamic 
+            $order_data['language_id'] = 1; //need to make dynamic 
+            $order_data['currency_id'] = 2; //need to make dynamic 
+            $order_data['currency_code'] = 'INR'; //need to make dynamic 
+            $order_data['currency_value'] = 1.0000000; //need to make dynamic 
+            
+            $this->Order->set($order_data);
+            $this->Order->save();
+            
+            foreach($cart_data as $k => $cart):
+                $order_product_data['order_id'] = $this->Order->order_id;
+                $order_product_data['product_id'] = $cart['Product']['product_id'];
+                $order_product_data['name'] = $cart['ProductDescription']['name'];
+                $order_product_data['model'] = $cart['Product']['model'];
+                $order_product_data['quantity'] = $cart['Cart']['quantity'];
+                $order_product_data['price'] = $cart['Product']['price'];
+                $order_product_data['total'] = $cart['Cart']['quantity'] * $cart['Product']['price'];
+                $order_product_data['tax'] = 0; //need to make dynamic 
+                $order_product_data['reward'] = 0; //need to make dynamic 
+                $this->OrderProduct->set($order_product_data);
+                $this->OrderProduct->save();
+            endforeach;
+            
+        else:
+            $status = 2;
+            $errorMsg = 'Parameter missing';
+        endif;
         $this->set(compact('status', 'errorMsg', 'data'));
         $this->set('_serialize', array('status', 'errorMsg', 'data'));
     }
