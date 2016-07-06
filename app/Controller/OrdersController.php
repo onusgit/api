@@ -2,7 +2,7 @@
 
 class OrdersController extends AppController {
 
-    public $uses = array('Country', 'ZoneToGeoZone', 'Setting', 'Coupon', 'CouponHistory', 'Cart', 'Product', 'CouponProduct', 'CouponCategory', 'ProductToCategory', 'ProductDescription', 'Currency', 'Customer', 'Order', 'OrderProduct');
+    public $uses = array('Country', 'ZoneToGeoZone', 'Setting', 'Coupon', 'CouponHistory', 'Cart', 'Product', 'CouponProduct', 'CouponCategory', 'ProductToCategory', 'ProductDescription', 'Currency', 'Customer', 'Order', 'OrderProduct', 'OrderTotal');
 
     public function apply_coupon() {
         $status = 1;
@@ -153,7 +153,7 @@ class OrdersController extends AppController {
     }
 
     public function use_gift_voucher() {
-        
+
     }
 
     public function payment_options($country_id = null, $weight = null) {
@@ -170,11 +170,13 @@ class OrdersController extends AppController {
                 foreach ($rate_str as $rs):
                     $rate = explode(":", $rs);
                     if (isset($rate[0]) && $rate[0] == $weight):
-                        $data['Shipping_method']['weight.weight_' . $zones['ZoneToGeoZone']['geo_zone_id']] = $country['Country']['name'] . "(Weight:" . $weight . "g) - Rs." . $rate[1];
+                        $data['Shipping_method_code'] = 'weight.weight_' . $zones['ZoneToGeoZone']['geo_zone_id'];
+                        $data['Shipping_method_name'] = $country['Country']['name'] . "(Weight:" . $weight . "g) - Rs." . $rate[1];
                     endif;
                 endforeach;
             else:
-                $data['Shipping_method']['free.free'] = 'Free Shipping - Rs.0.00';
+                $data['Shipping_method_code'] = 'free.free';
+                $data['Shipping_method_name'] = 'Free Shipping - Rs.0.00';                
             endif;
         endif;
         if (!empty($data)):
@@ -211,30 +213,39 @@ class OrdersController extends AppController {
         $status = 0;
         $errorMsg = '';
         $data = array();
-        if (!empty($_REQUEST['customer_id']) || !empty($_REQUEST['session_id'])):
-            
-            $customer_data = $this->Customer->find('first', array( 'conditions' => array('customer_id' => $_REQUEST['customer_id'])));
-            
+        if (!empty($_REQUEST['session_id'])):
+
+            $customer_data = $this->Customer->find('first', array('conditions' => array('customer_id' => @$_REQUEST['customer_id'])));
+
             $this->Product->bindModel(array('belongsTo' => array('ProductDescription' => array('foriegnKey' => 'product_id'))));
             $this->Cart->bindModel(array('belongsTo' => array('Product' => array('foriegnKey' => 'product_id'))));
-            $cart_data = $this->Cart->find('all', array('recursive' => 2 , 'conditions' => array('Cart.customer_id' => $_REQUEST['customer_id'], 'Cart.session_id' => $_REQUEST['session_id'])));
-            
+            $cart_data = $this->Cart->find('all', array('recursive' => 2, 'conditions' => array('Cart.customer_id' => $_REQUEST['customer_id'], 'Cart.session_id' => $_REQUEST['session_id'])));
+//            pr($cart_data);die;
 //            pr($cart_data);
 //            die;
-            
-            $order_data['invoice_no'] = 0; //need to make dynamic 
-            $order_data['invoice_prefix'] = 'INV-2016-00'; //need to make dynamic 
-            $order_data['store_id'] = '0'; //need to make dynamic 
-            $order_data['store_name'] = 'Snacks'; //need to make dynamic 
-            $order_data['store_url'] = 'http://mysnacky.com/'; //need to make dynamic 
+
+            $order_data['invoice_no'] = 0; //need to make dynamic
+            $order_data['invoice_prefix'] = 'INV-2016-00'; //need to make dynamic
+            $order_data['store_id'] = '0'; //need to make dynamic  // fix 0
+            $order_data['store_name'] = 'Snacks'; //need to make dynamic
+            $order_data['store_url'] = 'http://mysnacky.com/'; //need to make dynamic
             $order_data['customer_id'] = $_REQUEST['customer_id'];
             $order_data['customer_group_id'] = '1'; //need to make dynamic
-            $order_data['firstname'] = $customer_data['Customer']['firstname'];
-            $order_data['lastname'] = $customer_data['Customer']['lastname'];
-            $order_data['email'] = $customer_data['Customer']['email'];
-            $order_data['telephone'] = $customer_data['Customer']['telephone'];
-            
-            //payment field            
+            if (isset($_REQUEST['guest']) && $_REQUEST['guest'] == '1'):
+                $order_data['firstname'] = $_REQUEST['payment_firstname'];
+                $order_data['lastname'] = $_REQUEST['payment_lastname'];
+                $order_data['email'] = $_REQUEST['payment_email'];
+                $order_data['telephone'] = $_REQUEST['payment_email'];
+                $order_data['fax'] = $_REQUEST['fax'];
+            else:
+                $order_data['firstname'] = $customer_data['Customer']['firstname'];
+                $order_data['lastname'] = $customer_data['Customer']['lastname'];
+                $order_data['email'] = $customer_data['Customer']['email'];
+                $order_data['telephone'] = $customer_data['Customer']['telephone'];
+            endif;
+
+
+            //payment field
             $order_data['payment_firstname'] = $_REQUEST['payment_firstname'];
             $order_data['payment_lastname'] = $_REQUEST['payment_lastname'];
             $order_data['payment_company'] = $_REQUEST['payment_company'];
@@ -248,8 +259,8 @@ class OrdersController extends AppController {
             $order_data['payment_zone_id'] = $_REQUEST['payment_zone_id'];
             $order_data['payment_method'] = $_REQUEST['payment_method'];
             $order_data['payment_code'] = $_REQUEST['payment_code'];
-            
-            
+
+
             //shipping field
             $order_data['shipping_firstname'] = $_REQUEST['shipping_firstname'];
             $order_data['shipping_lastname'] = $_REQUEST['shipping_lastname'];
@@ -264,36 +275,84 @@ class OrdersController extends AppController {
             $order_data['shipping_zone_id'] = $_REQUEST['shipping_zone_id'];
             $order_data['shipping_method'] = $_REQUEST['shipping_method'];
             $order_data['shipping_code'] = $_REQUEST['shipping_code'];
-            
+
             //other field
             $order_data['comment'] = $_REQUEST['comment'];
             $order_data['total'] = $_REQUEST['total'];
-            $order_data['order_status_id'] = 5; //need to make dynamic 
-            $order_data['language_id'] = 1; //need to make dynamic 
-            $order_data['currency_id'] = 2; //need to make dynamic 
-            $order_data['currency_code'] = 'INR'; //need to make dynamic 
-            $order_data['currency_value'] = 1.0000000; //need to make dynamic 
-            
+            $order_data['order_status_id'] = 5; //need to make dynamic
+            $order_data['language_id'] = 1; //need to make dynamic
+            $order_data['currency_id'] = 2; //need to make dynamic
+            $order_data['currency_code'] = 'INR'; //need to make dynamic
+            $order_data['currency_value'] = 1.0000000; //need to make dynamic
+
             $this->Order->set($order_data);
             $this->Order->save();
-            
-            foreach($cart_data as $k => $cart):
-                $order_product_data['order_id'] = $this->Order->order_id;
+            $order_id = $this->Order->getLastInsertId();
+            foreach ($cart_data as $k => $cart):
+                $order_product_data['order_id'] = $order_id;
                 $order_product_data['product_id'] = $cart['Product']['product_id'];
-                $order_product_data['name'] = $cart['ProductDescription']['name'];
+                $order_product_data['name'] = isset($cart['ProductDescription']['name']) ? $cart['ProductDescription']['name'] : '&nbsp;';
                 $order_product_data['model'] = $cart['Product']['model'];
                 $order_product_data['quantity'] = $cart['Cart']['quantity'];
                 $order_product_data['price'] = $cart['Product']['price'];
                 $order_product_data['total'] = $cart['Cart']['quantity'] * $cart['Product']['price'];
-                $order_product_data['tax'] = 0; //need to make dynamic 
-                $order_product_data['reward'] = 0; //need to make dynamic 
+                $order_product_data['tax'] = 0; //need to make dynamic
+                $order_product_data['reward'] = 0; //need to make dynamic
                 $this->OrderProduct->set($order_product_data);
                 $this->OrderProduct->save();
+
+                //order totle table update
+                $order_total['OrderTotal'][0]['order_id'] = $order_id;
+                $order_total['OrderTotal'][0]['code'] = 'total';
+                $order_total['OrderTotal'][0]['title'] = 'Total';
+                $order_total['OrderTotal'][0]['sort_order'] = '9';
+                $order_total['OrderTotal'][0]['value'] = $_REQUEST['total'];
+
+                $order_total['OrderTotal'][1]['order_id'] = $order_id;
+                $order_total['OrderTotal'][1]['code'] = 'sub_total';
+                $order_total['OrderTotal'][1]['title'] = 'Sub-Total';
+                $order_total['OrderTotal'][1]['value'] = $_REQUEST['total'];
+                $order_total['OrderTotal'][1]['sort_order'] = '1';
+
+                $order_total['OrderTotal'][2]['order_id'] = $order_id;
+                $order_total['OrderTotal'][2]['code'] = 'shipping';
+                $order_total['OrderTotal'][2]['title'] = 'Free Shipping';
+                $order_total['OrderTotal'][2]['value'] = '0.0000';
+                $order_total['OrderTotal'][2]['sort_order'] = '1';
+                $this->OrderTotal->saveAll($order_total);
             endforeach;
-            
+            $status = 1;
+            $errorMsg = 'Order saved successfully';
+            $data['order_id'] = $order_id;
         else:
             $status = 2;
             $errorMsg = 'Parameter missing';
+        endif;
+        $this->set(compact('status', 'errorMsg', 'data'));
+        $this->set('_serialize', array('status', 'errorMsg', 'data'));
+    }
+
+    public function order_history($customer_id = null) {
+        $status = 0;
+        $errorMsg = '';
+        $data = array();
+
+        $this->Order->bindModel(array('belongsTo' => array('OrderStatus' => array('foreignKey' => 'order_status_id'))));
+        $this->Order->bindModel(array('hasMany' => array('OrderProduct' => array('foreignKey' => 'order_id'))));
+        $orders = $this->Order->find('all', array('conditions' => array('customer_id' => $customer_id)));
+//        pr($orders);die;
+        if(!empty($orders)):
+            foreach ($orders as $k => $o):
+                $data[$k]['order_id'] = $o['Order']['order_id'];
+                $data[$k]['status'] = !empty($o['OrderStatus']['name'])?$o['OrderStatus']['name']:'';
+                $data[$k]['no_of_product'] = count($o['OrderProduct']);
+                $data[$k]['date'] = date('d/m/Y', strtotime($o['Order']['date_added']));
+                $data[$k]['customer'] = $o['Order']['payment_firstname']." ".$o['Order']['payment_lastname'];
+                $data[$k]['total'] = number_format($o['Order']['total'], 2);
+            endforeach;
+        endif;
+        if(!empty($data)):
+            $status = 1;
         endif;
         $this->set(compact('status', 'errorMsg', 'data'));
         $this->set('_serialize', array('status', 'errorMsg', 'data'));

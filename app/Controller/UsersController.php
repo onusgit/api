@@ -2,7 +2,7 @@
 
 class UsersController extends AppController {
 
-    public $uses = array('Customer');
+    public $uses = array('Customer', 'Address');
     public $components = array('RequestHandler');
 
     function beforeFilter() {
@@ -81,6 +81,34 @@ class UsersController extends AppController {
         endif;
 
 
+        $this->set(compact('status', 'errorMsg', 'data'));
+        $this->set('_serialize', array('status', 'errorMsg', 'data'));
+    }
+
+    public function get_address($customer_id) {
+        $status = 0;
+        $errorMsg = '';
+        $data = array();
+        $address = $this->Address->find('all', array('conditions' => array('customer_id' => $customer_id)));
+        if (!empty($address)):
+            foreach ($address as $k => $o):
+                $data[$k]['address_id'] = $o['Address']['address_id'];
+                $data[$k]['customer_id'] = $o['Address']['customer_id'];
+                $data[$k]['firstname'] = $o['Address']['firstname'];
+                $data[$k]['lastname'] = $o['Address']['lastname'];
+                $data[$k]['company'] = $o['Address']['company'];
+                $data[$k]['address_1'] = $o['Address']['address_1'];
+                $data[$k]['address_2'] = $o['Address']['address_2'];
+                $data[$k]['city'] = $o['Address']['city'];
+                $data[$k]['postcode'] = $o['Address']['postcode'];
+                $data[$k]['country_id'] = $o['Address']['country_id'];
+                $data[$k]['zone_id'] = $o['Address']['zone_id'];
+                $data[$k]['full_address'] = $o['Address']['firstname'].", ".$o['Address']['lastname'].", ". $o['Address']['city'].", ". $o['Address']['zone_id'].", ". $o['Address']['country_id'];
+            endforeach;
+        endif;
+        if (!empty($data)):
+            $status = 1;
+        endif;
         $this->set(compact('status', 'errorMsg', 'data'));
         $this->set('_serialize', array('status', 'errorMsg', 'data'));
     }

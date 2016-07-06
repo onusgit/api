@@ -161,27 +161,28 @@ class ProductsController extends AppController {
         $data = array();
         
         if ($this->request->is(array('post', 'get'))):
-            if (empty($_REQUEST['customer_id']) || empty($_REQUEST['session_id'])):
+//            if (empty($_REQUEST['customer_id']) || empty($_REQUEST['session_id'])):
+            if (empty($_REQUEST['session_id'])):
                 $status = 2;
                 $errorMsg = 'Parameter missing';
             else:                
                 if (!empty($_REQUEST['product_id']) && $_REQUEST['product_quantity'] == 0): 
-                    $cart_data = $this->Cart->find('first', array('conditions' => array('Cart.customer_id' => $_REQUEST['customer_id'], 'Cart.session_id' => $_REQUEST['session_id'], 'Cart.product_id' => $_REQUEST['product_id'])));
+                    $cart_data = $this->Cart->find('first', array('conditions' => array('Cart.session_id' => $_REQUEST['session_id'], 'Cart.product_id' => $_REQUEST['product_id'])));
                     if(!empty($cart_data)):                        
                         $this->Cart->delete($cart_data['Cart']['cart_id']);                    
                         $status = 3; // remove from cart
                     endif;
                 elseif (!empty($_REQUEST['product_id']) && !empty($_REQUEST['product_quantity'])):
-                    $cart['customer_id'] = $_REQUEST['customer_id'];
+                    $cart['customer_id'] = isset($_REQUEST['customer_id'])?$_REQUEST['customer_id']:'0';
                     $cart['session_id'] = $_REQUEST['session_id'];
                     $cart['product_id'] = $_REQUEST['product_id'];
                     $cart['quantity'] = $_REQUEST['product_quantity'];
                     $product = $this->Product->findByProductId($cart['product_id']);
                     if (empty($product) || $cart['quantity'] > $product['Product']['quantity']):
                         $status = 2;
-                        $errorMsg = 'Product quanitity is more then available ';
+                        $errorMsg = 'Product quanitity is not in stock';
                     else:
-                        $cart_data = $this->Cart->find('first', array('conditions' => array('Cart.customer_id' => $cart['customer_id'], 'Cart.session_id' => $cart['session_id'], 'Cart.product_id' => $cart['product_id'])));
+                        $cart_data = $this->Cart->find('first', array('conditions' => array('Cart.session_id' => $cart['session_id'], 'Cart.product_id' => $cart['product_id'])));
                         if (!empty($cart_data)):
                             $success = $this->Cart->updateAll(array('quantity' => $cart['quantity']), array('cart_id' => $cart_data['Cart']['cart_id']));
                             if ($success):
@@ -206,12 +207,14 @@ class ProductsController extends AppController {
                 endif;
                 $this->Product->bindModel(array('belongsTo' => array('ProductDescription' => array('foriegnKey' => 'ProductDescription.product_id'))));
                 $this->Cart->bindModel(array('belongsTo' => array('Product' => array('foriegnKey' => 'product_id'))));
-                $cart_product_data = $this->Cart->find('all', array('recursive' => 1, 'conditions' => array('Cart.customer_id' => $_REQUEST['customer_id'], 'Cart.session_id' => $_REQUEST['session_id'])));
-                //pr($cart_product_data);
+                $cart_product_data = $this->Cart->find('all', array('recursive' => 1, 'conditions' => array('Cart.session_id' => $_REQUEST['session_id'])));
+//                pr($cart_product_data);
+//                die;
                 if (!empty($cart_product_data)):
                     if($status != 3):
                         $status = 1;
-                    endif;                    
+                    endif;    
+                    $weight = 0;
                     foreach ($cart_product_data as $k => $c_data):
                         $product_description = $this->ProductDescription->find('first', array('conditions' => array('ProductDescription.product_id' => $c_data['Cart']['product_id'])));
                         $data[$k]['product_id'] = $c_data['Cart']['product_id'];
@@ -220,7 +223,9 @@ class ProductsController extends AppController {
                         $total_cost += $c_data['Product']['price'] * $c_data['Cart']['quantity'];
                         $data[$k]['product_name'] = $product_description['ProductDescription']['name'];
                         $data[$k]['quantity'] = $c_data['Cart']['quantity'];
+                        $weight += $c_data['Cart']['quantity']*$c_data['Product']['weight'];
                     endforeach;
+                    
                 else:
                     $errorMsg = 'No product found in cart';
                 endif;
@@ -229,11 +234,12 @@ class ProductsController extends AppController {
         if(!empty($data)):            
             $total_item = count($data);
             $total_cost = number_format($total_cost, 2);
+            $total_weight = $weight;
         else:
             $status = 0;
         endif;
-        $this->set(compact('status', 'errorMsg', 'total_item', 'total_cost', 'data'));
-        $this->set('_serialize', array('status', 'errorMsg', 'total_item', 'total_cost', 'data'));
+        $this->set(compact('status', 'errorMsg', 'total_item', 'total_weight', 'total_cost', 'data'));
+        $this->set('_serialize', array('status', 'errorMsg', 'total_item', 'total_weight', 'total_cost', 'data'));
     }
 
 }
