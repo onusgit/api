@@ -2,7 +2,7 @@
 
 class ProductsController extends AppController {
 
-    public $uses = array('Product', 'ProductToCategory', 'StockStatus', 'ProductDescription', 'Cart', 'CustomerWishlist');
+    public $uses = array('Journal2Module', 'Product', 'ProductToCategory', 'StockStatus', 'ProductDescription', 'Cart', 'CustomerWishlist');
 
     public function get_products() {
         $status = 0;
@@ -11,12 +11,12 @@ class ProductsController extends AppController {
         $conditions = [];
         $order = [];
         $cat_product = array();
-        if ($this->request->is(array('post', 'get'))):
+        
+        if(isset($_REQUEST['category_id']) && !empty($_REQUEST['category_id'])):
             if (!empty($_REQUEST['category_id'])):
                 $cat_product = $this->ProductToCategory->find('list', array('fields' => array('ProductToCategory.product_id'), 'conditions' => array('ProductToCategory.category_id' => $_REQUEST['category_id'])));
                 $conditions[] = array('Product.product_id' => $cat_product);
-            endif;
-
+            endif;            
             if (!empty($_REQUEST['product_tags'])):
                 $tags = explode(',', $_REQUEST['product_tags']);
                 foreach ($tags as $tag):
@@ -55,10 +55,13 @@ class ProductsController extends AppController {
             $page = isset($this->request->query['page']) ? $this->request->query['page'] : 0;
             $limit = 10;
             $offset = ($page) * $limit;
+           
             $product_data = $this->Product->find('all', array('recursive' => 2, 'conditions' => $conditions, 'order' => $order, 'limit' => $limit, 'offset' => $offset, 'group' => 'Product.product_id'));
 
             $total_product = $this->Product->find('first', array('conditions' => $conditions, 'fields' => array('COUNT(Product.product_id) AS total_product'), 'group by' => 'Product.product_id', 'order' => $order));
             $min_max_total = $this->Product->find('first', array('conditions' => array('Product.product_id' => $cat_product), 'fields' => array('MIN(Product.price) AS min_price', 'MAX(Product.price) AS max_price'), 'group by' => 'Product.product_id', 'order' => $order));
+            
+          
             if (!empty($product_data)):
                 $status = 1;
                 foreach ($product_data as $k => $pr_data):
@@ -66,12 +69,12 @@ class ProductsController extends AppController {
                     $data[$k]['name'] = $pr_data['ProductDescription']['name'];
                     $data[$k]['description'] = html_entity_decode($pr_data['ProductDescription']['description']);
                     $data[$k]['quantity'] = $pr_data['Product']['quantity'];
-                    $data[$k]['price'] = $pr_data['Product']['price'];
+                    $data[$k]['price'] = number_format($pr_data['Product']['price'], 2);
                     $data[$k]['sku'] = $pr_data['Product']['sku'];
                     $data[$k]['model'] = $pr_data['Product']['model'];
                     $data[$k]['viewed'] = $pr_data['Product']['viewed'];
                     if (!empty($pr_data['Product']['image'])):
-                        $data[$k]['image'] = FULL_BASE_URL . '/image/' . $pr_data['Product']['image'];
+                        $data[$k]['image'] = FULL_BASE_URL . '/image/' . str_replace(' ', '%20', $pr_data['Product']['image']);
                     else:
                         $data[$k]['image'] = '';
                     endif;
@@ -87,7 +90,9 @@ class ProductsController extends AppController {
             $total_page = floor($total_products / $limit);
             $availability = array('7,In Stock', '5,Out of Stock');
             $tags = array('sweets','bhusu');
-        endif;
+        else:
+            $errorMsg = 'please pass category';
+        endif;      
         $this->set(compact('status', 'errorMsg', 'min_price', 'max_price', 'total_products', 'total_page', 'data', 'tags', 'availability'));
         $this->set('_serialize', array('status', 'errorMsg', 'min_price', 'max_price', 'tags', 'availability', 'total_products', 'total_page', 'data'));
     }
@@ -127,7 +132,7 @@ class ProductsController extends AppController {
                     $data['model'] = $product_data['Product']['model'];
                     $data['viewed'] = $product_data['Product']['viewed'];
                     if (!empty($product_data['Product']['image'])):
-                        $data['image'] = FULL_BASE_URL . '/image/' . $product_data['Product']['image'];
+                        $data['image'] = FULL_BASE_URL . '/image/' . str_replace(' ', '%20', $product_data['Product']['image']);
                     else:
                         $data['image'] = '';
                     endif;
@@ -218,7 +223,7 @@ class ProductsController extends AppController {
                     foreach ($cart_product_data as $k => $c_data):
                         $product_description = $this->ProductDescription->find('first', array('conditions' => array('ProductDescription.product_id' => $c_data['Cart']['product_id'])));
                         $data[$k]['product_id'] = $c_data['Cart']['product_id'];
-                        $data[$k]['product_image'] = FULL_BASE_URL . '/image/' .$c_data['Product']['image'];
+                        $data[$k]['product_image'] = FULL_BASE_URL . '/image/' .str_replace(' ', '%20', $c_data['Product']['image']);
                         $data[$k]['product_price'] = number_format($c_data['Product']['price'], 2);
                         $total_cost += $c_data['Product']['price'] * $c_data['Cart']['quantity'];
                         $data[$k]['product_name'] = $product_description['ProductDescription']['name'];

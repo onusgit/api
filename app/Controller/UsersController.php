@@ -2,7 +2,7 @@
 
 class UsersController extends AppController {
 
-    public $uses = array('Customer', 'Address');
+    public $uses = array('Customer', 'Address', 'Zone');
     public $components = array('RequestHandler');
 
     function beforeFilter() {
@@ -89,6 +89,7 @@ class UsersController extends AppController {
         $status = 0;
         $errorMsg = '';
         $data = array();
+        $this->Address->bindModel(array('belongsTo' => array('Country' => array('foreignKey' => 'country_id'))));
         $address = $this->Address->find('all', array('conditions' => array('customer_id' => $customer_id)));
         if (!empty($address)):
             foreach ($address as $k => $o):
@@ -102,8 +103,12 @@ class UsersController extends AppController {
                 $data[$k]['city'] = $o['Address']['city'];
                 $data[$k]['postcode'] = $o['Address']['postcode'];
                 $data[$k]['country_id'] = $o['Address']['country_id'];
-                $data[$k]['zone_id'] = $o['Address']['zone_id'];
-                $data[$k]['full_address'] = $o['Address']['firstname'].", ".$o['Address']['lastname'].", ". $o['Address']['city'].", ". $o['Address']['zone_id'].", ". $o['Address']['country_id'];
+                $data[$k]['country_name'] = $o['Country']['name'];
+                $data[$k]['zone_id'] = $o['Address']['zone_id'];                
+                $zone = $this->Zone->find('first', array('conditions' => array('zone_id' => $o['Address']['zone_id'])));
+                $data[$k]['zone_name'] = $zone['Zone']['name'];                
+               
+                $data[$k]['full_address'] = $o['Address']['firstname'].", ".$o['Address']['lastname'].", ". $o['Address']['city'].", ". $zone['Zone']['name'].", ".$o['Country']['name'];
             endforeach;
         endif;
         if (!empty($data)):

@@ -59,7 +59,7 @@ class WishListsController extends AppController {
                         $data[$k]['model'] = $c_data['Product']['model'];
                         $data[$k]['viewed'] = $c_data['Product']['viewed'];
                         if (!empty($c_data['Product']['image'])):
-                            $data[$k]['image'] = FULL_BASE_URL . '/image/' .$c_data['Product']['image'];
+                            $data[$k]['image'] = FULL_BASE_URL . '/image/' .str_replace(' ', '%20', $c_data['Product']['image']);
                         else:
                             $data[$k]['image'] = '';
                         endif;

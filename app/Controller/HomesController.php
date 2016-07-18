@@ -17,14 +17,31 @@ class HomesController extends AppController {
             $slider_arr = json_decode($slider['Journal2Module']['module_data'], true);
             if (!empty($slider_arr['slides'])):
                 foreach ($slider_arr['slides'] as $k => $s):
-                    $data['slides'][$k]['image'] = FULL_BASE_URL . '/image/' . reset($s['image']);
+                    $data['slides'][$k]['image'] = FULL_BASE_URL . '/image/' . str_replace(' ', '%20', reset($s['image']));
+                    $data['slides'][$k]['caption'] = "";
                     if (!empty($s['captions'])):
                         $data['slides'][$k]['caption'] = $s['captions'][0]['caption_name'];
                     endif;
                 endforeach;
             endif;
         endif;
-
+        
+        //product options
+        $poptions = $this->Journal2Module->find('all', array('conditions' => array('module_type' => 'journal2_product_tabs')));
+        $i = 0;
+        foreach ($poptions as $k => $o):
+            $pdata = json_decode($o['Journal2Module']['module_data'], true);        
+            if($pdata['status'] == '1' && $i < 2):
+                $options[$i]['name'] = @$pdata['name']['value'][1];
+                if($i == 0):
+                    $options[$i]['value'] = strip_tags(@$pdata['content'][1]);
+                else:
+                    $options[$i]['value'] = @$pdata['content'][1];                    
+                endif;
+                $i++;
+            endif;       
+        endforeach;
+        
         //get home catedories        
         $this->Category->bindModel(array('belongsTo' => array('CategoryDescription' => array('foreignKey' => FALSE, 'conditions' => array('CategoryDescription.category_id = Category.category_id')))));
         $category_data = $this->Category->find('all');
@@ -33,7 +50,7 @@ class HomesController extends AppController {
                 $data['Categories'][$k]['id'] = $cat['Category']['category_id'];
                 $data['Categories'][$k]['name'] = $cat['CategoryDescription']['name'];
                 if (!empty($cat['Category']['image'])):
-                    $data['Categories'][$k]['image'] = FULL_BASE_URL . '/image/' . $cat['Category']['image'];
+                    $data['Categories'][$k]['image'] = FULL_BASE_URL . '/image/' . str_replace(' ', '%20', $cat['Category']['image']);
                 else:
                     $data['Categories'][$k]['image'] = "";
                 endif;
@@ -41,51 +58,54 @@ class HomesController extends AppController {
         endif;
 
         //get homes tag and its product
-        $products = $this->Journal2Module->find('all', array('conditions' => array('module_type' => 'journal2_carousel')));
-
+//        $products = $this->Journal2Module->find('all', array('conditions' => array('module_type' => 'journal2_carousel')));
+        $products = $this->Journal2Module->find('all', array('conditions' => array('module_type' => 'journal2_carousel', 'module_id' => array('250', '88', '244'))));
+//        pr($products);
+//        die;
         if (!empty($products)):
-            for ($i = 0; $i < 3; $i++):
+            for ($i = 0; $i < 4; $i++):
                 if (isset($products[$i]['Journal2Module']['module_data']) && !empty($products[$i]['Journal2Module']['module_data'])):
                     $product_arr = json_decode($products[$i]['Journal2Module']['module_data'], true);
 //                     if(isset($product_arr['module_name'])):
 //                         $data['product'][$i]['tag_name'] = $product_arr['module_name'];                     
 //                     endif;  
+//                    pr($product_arr);
                     if (isset($product_arr['product_sections'][0]['section_title']['value'][1])):
-                        $data['product'][$i]['tag_name'] = $product_arr['product_sections'][0]['section_title']['value'][1];
+                        $data['product'][$i]['tag_name'] = $product_arr['module_name'];
+//                        $data['product'][$i]['tag_name'] = $product_arr['product_sections'][0]['section_title']['value'][1];
                         if (isset($product_arr['product_sections'][0]['category']['data']['id'])):
                             $cat_product = $this->ProductToCategory->find('list', array('fields' => array('ProductToCategory.product_id'), 'conditions' => array('ProductToCategory.category_id' => $product_arr['product_sections'][0]['category']['data']['id'])));
-                            $conditions[] = array('Product.product_id' => $cat_product);
                             $this->Product->bindModel(array(
                                 'belongsTo' => array(
                                     'StockStatus' => array('foreignKey' => FALSE, 'conditions' => array('StockStatus.stock_status_id = Product.stock_status_id')),
                                     'ProductDescription' => array('foreignKey' => FALSE, 'conditions' => array('ProductDescription.product_id = Product.product_id')),
                                 )
                             ));
-                            $product_data = $this->Product->find('all', array('recursive' => 2, 'conditions' => $conditions, 'limit' => 8, 'group' => 'Product.product_id'));
-                            if(!empty($product_data)):
-                                foreach ($product_data as $k => $p):                                    
+                            $product_data = $this->Product->find('all', array('recursive' => 2, 'conditions' => array('Product.product_id' => $cat_product), 'limit' => 8, 'group' => 'Product.product_id'));
+                            if (!empty($product_data)):
+                                foreach ($product_data as $k => $p):
                                     $data['product'][$i]['products'][$k]['id'] = $p['Product']['product_id'];
                                     $data['product'][$i]['products'][$k]['name'] = $p['ProductDescription']['name'];
                                     $data['product'][$i]['products'][$k]['description'] = html_entity_decode($p['ProductDescription']['description']);
                                     $data['product'][$i]['products'][$k]['quantity'] = $p['Product']['quantity'];
-                                    $data['product'][$i]['products'][$k]['price'] = $p['Product']['price'];
+                                    $data['product'][$i]['products'][$k]['price'] = number_format($p['Product']['price'], 2);
                                     $data['product'][$i]['products'][$k]['sku'] = $p['Product']['sku'];
                                     $data['product'][$i]['products'][$k]['model'] = $p['Product']['model'];
                                     $data['product'][$i]['products'][$k]['viewed'] = $p['Product']['viewed'];
-                                    if(!empty($p['Product']['image'])):
-                                        $data['product'][$i]['products'][$k]['image'] =  FULL_BASE_URL .'/image/'.$p['Product']['image'];
+                                    if (!empty($p['Product']['image'])):
+                                        $data['product'][$i]['products'][$k]['image'] = FULL_BASE_URL . '/image/' . str_replace(' ', '%20', $p['Product']['image']);
                                     else:
-                                        $data['product'][$i]['products'][$k]['image'] =  '';
+                                        $data['product'][$i]['products'][$k]['image'] = '';
                                     endif;
                                     $data['product'][$i]['products'][$k]['minimum'] = $p['Product']['minimum'];
                                     $data['product'][$i]['products'][$k]['shipping'] = $p['Product']['shipping'];
                                     $data['product'][$i]['products'][$k]['stock_status'] = $p['StockStatus']['name'];
                                 endforeach;
                             else:
-                                $data['product'][$i]['products'] = array();                                
+                                $data['product'][$i]['products'] = array();
                             endif;
                         else:
-                             $data['product'][$i]['products'] = array();                                
+                            $data['product'][$i]['products'] = array();
                         endif;
                     endif;
                 endif;
@@ -95,8 +115,8 @@ class HomesController extends AppController {
             $status = 1;
             $errorMsg = 'success';
         endif;
-        $this->set(compact('status', 'errorMsg', 'data'));
-        $this->set('_serialize', array('status', 'errorMsg', 'data'));
+        $this->set(compact('status', 'errorMsg', 'options', 'data'));
+        $this->set('_serialize', array('status', 'errorMsg', 'options', 'data'));
     }
 
     public function get_countries() {
@@ -104,15 +124,15 @@ class HomesController extends AppController {
         $errorMsg = '';
         $data = array();
         $country = $this->Country->find('all', array('conditions' => array('status' => '1')));
-        if(!empty($country)):
+        if (!empty($country)):
             foreach ($country as $k => $c):
                 $data[$k]['country_id'] = $c['Country']['country_id'];
                 $data[$k]['name'] = $c['Country']['name'];
                 $zone = $this->Zone->find('all', array('conditions' => array('country_id' => $c['Country']['country_id'])));
-                if(!empty($zone)):
+                if (!empty($zone)):
                     foreach ($zone as $kz => $z):
                         $data[$k]['zone'][$kz]['zone_id'] = $z['Zone']['zone_id'];
-                        $data[$k]['zone'][$kz]['name'] = $z['Zone']['name'];                    
+                        $data[$k]['zone'][$kz]['name'] = $z['Zone']['name'];
                     endforeach;
                 endif;
             endforeach;
@@ -124,4 +144,5 @@ class HomesController extends AppController {
         $this->set(compact('status', 'errorMsg', 'data'));
         $this->set('_serialize', array('status', 'errorMsg', 'data'));
     }
+
 }

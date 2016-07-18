@@ -121,7 +121,7 @@ class OrdersController extends AppController {
                     foreach ($cart_product_data as $k => $c_data):
                         $product_description = $this->ProductDescription->find('first', array('conditions' => array('ProductDescription.product_id' => $c_data['Cart']['product_id'])));
                         $data[$k]['product_id'] = $c_data['Cart']['product_id'];
-                        $data[$k]['product_image'] = FULL_BASE_URL . '/image/' . $c_data['Product']['image'];
+                        $data[$k]['product_image'] = FULL_BASE_URL . '/image/' . str_replace(' ', '%20', $c_data['Product']['image']);
                         $data[$k]['product_price'] = number_format($c_data['Product']['price'], 2);
                         $total_cost += $c_data['Product']['price'] * $c_data['Cart']['quantity'];
                         $data[$k]['product_name'] = $product_description['ProductDescription']['name'];
@@ -187,26 +187,30 @@ class OrdersController extends AppController {
         $this->set('_serialize', array('status', 'errorMsg', 'data'));
     }
 
-    public function convert_currency() {
+    /*
+    $value = value to be translate
+     $from = org current 2 = inr, 5=dollar
+     * * 
+     * 
+     **/
+    
+    public function convert_currency($value = null, $from = 2, $to = 5) {
         $status = 0;
         $errorMsg = '';
-        $data = array();
-        if (!empty($_REQUEST['value']) || !empty($_REQUEST['from']) || !empty($_REQUEST['to'])):
-            $value = $_REQUEST['value'];
-            $from = $_REQUEST['from'];
-            $to = $_REQUEST['to'];
+        $price = '';
+        if ($value):           
             $from_val = $this->Currency->find('first', array('fields' => array('value'), 'conditions' => array('currency_id' => $from)));
             $to_val = $this->Currency->find('first', array('fields' => array('value'), 'conditions' => array('currency_id' => $to)));
             $converted_value = $value * ( $to_val['Currency']['value'] / $from_val['Currency']['value']);
             $status = 1;
             $errorMsg = 'Price converted successfully';
-            $data['price'] = $converted_value;
+            $price = $converted_value;
         else:
             $status = 2;
             $errorMsg = 'Parameters are not sufficient';
         endif;
-        $this->set(compact('status', 'errorMsg', 'data'));
-        $this->set('_serialize', array('status', 'errorMsg', 'data'));
+        $this->set(compact('status', 'errorMsg', 'price'));
+        $this->set('_serialize', array('status', 'errorMsg', 'price'));
     }
 
     public function place_order() {
