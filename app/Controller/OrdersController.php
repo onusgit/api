@@ -153,7 +153,7 @@ class OrdersController extends AppController {
     }
 
     public function use_gift_voucher() {
-
+        
     }
 
     public function payment_options($country_id = null, $weight = null) {
@@ -176,7 +176,7 @@ class OrdersController extends AppController {
                 endforeach;
             else:
                 $data['Shipping_method_code'] = 'free.free';
-                $data['Shipping_method_name'] = 'Free Shipping - Rs.0.00';                
+                $data['Shipping_method_name'] = 'Free Shipping - Rs.0.00';
             endif;
         endif;
         if (!empty($data)):
@@ -188,17 +188,17 @@ class OrdersController extends AppController {
     }
 
     /*
-    $value = value to be translate
-     $from = org current 2 = inr, 5=dollar
+      $value = value to be translate
+      $from = org current 2 = inr, 5=dollar
      * * 
      * 
-     **/
-    
+     * */
+
     public function convert_currency($value = null, $from = 2, $to = 5) {
         $status = 0;
         $errorMsg = '';
         $price = '';
-        if ($value):           
+        if ($value):
             $from_val = $this->Currency->find('first', array('fields' => array('value'), 'conditions' => array('currency_id' => $from)));
             $to_val = $this->Currency->find('first', array('fields' => array('value'), 'conditions' => array('currency_id' => $to)));
             $converted_value = $value * ( $to_val['Currency']['value'] / $from_val['Currency']['value']);
@@ -345,21 +345,55 @@ class OrdersController extends AppController {
         $this->Order->bindModel(array('hasMany' => array('OrderProduct' => array('foreignKey' => 'order_id'))));
         $orders = $this->Order->find('all', array('conditions' => array('customer_id' => $customer_id)));
 //        pr($orders);die;
-        if(!empty($orders)):
+        if (!empty($orders)):
             foreach ($orders as $k => $o):
                 $data[$k]['order_id'] = $o['Order']['order_id'];
-                $data[$k]['status'] = !empty($o['OrderStatus']['name'])?$o['OrderStatus']['name']:'';
+                $data[$k]['status'] = !empty($o['OrderStatus']['name']) ? $o['OrderStatus']['name'] : '';
                 $data[$k]['no_of_product'] = count($o['OrderProduct']);
                 $data[$k]['date'] = date('d/m/Y', strtotime($o['Order']['date_added']));
-                $data[$k]['customer'] = $o['Order']['payment_firstname']." ".$o['Order']['payment_lastname'];
+                $data[$k]['customer'] = $o['Order']['payment_firstname'] . " " . $o['Order']['payment_lastname'];
                 $data[$k]['total'] = number_format($o['Order']['total'], 2);
             endforeach;
         endif;
-        if(!empty($data)):
+        if (!empty($data)):
             $status = 1;
         endif;
         $this->set(compact('status', 'errorMsg', 'data'));
         $this->set('_serialize', array('status', 'errorMsg', 'data'));
+    }
+
+    public function payatm_generateChecksum() {
+        App::import('Vendor', 'paytm', array('file' => 'paytm' . DS . 'lib' . DS . 'encdec_paytm.php'));
+        $checkSum = getChecksumFromArray($_POST, 'O!Pyeu%UB3yp6_#I');
+        echo json_encode(array("CHECKSUMHASH" => $checkSum, "ORDER_ID" => $_POST["ORDER_ID"], "payt_STATUS" => "1"));
+        die();
+        //Sample response return to SDK
+        //  {"CHECKSUMHASH":"GhAJV057opOCD3KJuVWesQ9pUxMtyUGLPAiIRtkEQXBeSws2hYvxaj7jRn33rTYGRLx2TosFkgReyCslu4OUj\/A85AvNC6E4wUP+CZnrBGM=","ORDER_ID":"asgasfgasfsdfhl7","payt_STATUS":"1"} 
+    }
+
+    public function payatm_verifyChecksum() {
+        App::import('Vendor', 'paytm', array('file' => 'paytm' . DS . 'lib' . DS . 'encdec_paytm.php'));        
+        $paytmChecksum = "";
+        $paramList = array();
+        $isValidChecksum = FALSE;
+
+        $paramList = $_POST;
+        $return_array = $_POST;
+        $paytmChecksum = isset($_POST["CHECKSUMHASH"]) ? $_POST["CHECKSUMHASH"] : ""; //Sent by Paytm pg
+//Verify all parameters received from Paytm pg to your application. Like MID received from paytm pg is same as your application’s MID, TXN_AMOUNT and ORDER_ID are same as what was sent by you to Paytm PG for initiating transaction etc.
+        $isValidChecksum = verifychecksum_e($paramList, 'O!Pyeu%UB3yp6_#I', $paytmChecksum); //will return TRUE or FALSE string.
+// if ($isValidChecksum===TRUE)
+// 	$return_array["IS_CHECKSUM_VALID"] = "Y";
+// else
+// 	$return_array["IS_CHECKSUM_VALID"] = "N";
+
+        $return_array["IS_CHECKSUM_VALID"] = $isValidChecksum ? "Y" : "N";
+//$return_array["TXNTYPE"] = "";
+//$return_array["REFUNDAMT"] = "";
+        unset($return_array["CHECKSUMHASH"]);
+
+        echo $encoded_json = htmlentities(json_encode($return_array));
+        die();
     }
 
 }

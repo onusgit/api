@@ -44,7 +44,8 @@ class HomesController extends AppController {
         
         //get home catedories        
         $this->Category->bindModel(array('belongsTo' => array('CategoryDescription' => array('foreignKey' => FALSE, 'conditions' => array('CategoryDescription.category_id = Category.category_id')))));
-        $category_data = $this->Category->find('all');
+        $category_data = $this->Category->find('all', array('conditions' => array('Category.parent_id' => '0')));
+        
         if (!empty($category_data)):
             foreach ($category_data as $k => $cat):
                 $data['Categories'][$k]['id'] = $cat['Category']['category_id'];
