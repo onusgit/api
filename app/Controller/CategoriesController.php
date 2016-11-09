@@ -15,7 +15,7 @@ class CategoriesController extends AppController {
         $conditions = array('Category.parent_id' => 0);
         $this->Category->bindModel(array('belongsTo' => array('CategoryDescription' => array('foreignKey' => FALSE, 'conditions' => array('CategoryDescription.category_id = Category.category_id')))));
 //        $category_data = $this->Category->find('all', array('recursive' => 2, 'conditions' => $conditions ,'order' => $order));
-        $category_data = $this->Category->find('all', array('recursive' => 2));
+        $category_data = $this->Category->find('all', array('recursive' => 2, 'conditions' => array('parent_id' => '0')));
 //        pr($category_data);die;
         $cat_id_name = array();
         if (!empty($category_data)):

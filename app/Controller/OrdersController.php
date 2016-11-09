@@ -6,7 +6,7 @@ class OrdersController extends AppController {
 
     public function apply_coupon() {
         $status = 1;
-        $errorMsg = 'Coupon can be apply';
+        $errorMsg = '';
         $data = array();
 
         if (empty($_REQUEST['code']) || empty($_REQUEST['customer_id']) || empty($_REQUEST['session_id'])):
@@ -16,34 +16,34 @@ class OrdersController extends AppController {
             $code = $_REQUEST['code'];
             $customer_id = $_REQUEST['customer_id'];
             $session_id = $_REQUEST['session_id'];
-            $coupon_query = $this->Coupon->find('first', array('code' => $code, 'date_start' => '< NOW()', 'date_end' => '> NOW()', 'status' => 1));
+            $coupon_query = $this->Coupon->find('first', array('conditions' => array('code' => $code, 'date_start < NOW()', 'date_end > NOW()', 'status' => 1)));
             $this->Cart->bindModel(array('belongsTo' => array('Product' => array('foriegnKey' => 'product_id'))));
             $cart_data = $this->Cart->find('all', array('conditions' => array('customer_id' => $customer_id)));
             $total = 0;
-
+           
             foreach ($cart_data as $k => $cart):
                 $total += number_format($cart['Product']['price'], 2) * $cart['Cart']['quantity'];
             endforeach;
 
-            if ($coupon_query) {
+            if ($coupon_query) { 
                 if ($coupon_query['Coupon']['total'] > (int) $total) {
                     $status = 0;
                     $errorMsg = 'Amount must be greater then coupon set value';
                 }
-
+                
                 $coupon_history_query = $this->CouponHistory->find('all', array('coupon_id' => $coupon_query['Coupon']['coupon_id']));
 
-
+                
                 //$coupon_history_query = $this->db->query("SELECT COUNT(*) AS total FROM `" . DB_PREFIX . "coupon_history` ch WHERE ch.coupon_id = '" . (int) $coupon_query->row['coupon_id'] . "'");
 
                 if ($coupon_query['Coupon']['uses_total'] > 0 && ( count($coupon_history_query) >= $coupon_query['Coupon']['uses_total'])) {
                     $status = 0;
                     $errorMsg = 'Coupon reached to maximum usage';
                 }
-
+                
                 if (empty($customer_id)) {
                     $status = 0;
-                    $errorMsg = 'Customer id must needed';
+                    $errorMsg = 'Please login to continue';
                 }
 
                 if (!empty($customer_id)) {
@@ -84,7 +84,6 @@ class OrdersController extends AppController {
 
                             continue;
                         }
-
                         foreach ($coupon_category_data as $category_id) {
                             $coupon_category_query = $this->ProductToCategory->find('all', array('condition' => array('product_id' => $product['Cart']['product_id'], 'category_id' => $category_id)));
                             //$coupon_category_query = $this->db->query("SELECT COUNT(*) AS total FROM `" . DB_PREFIX . "product_to_category` WHERE `product_id` = '" . (int) $product['product_id'] . "' AND category_id = '" . (int) $category_id . "'");
@@ -95,7 +94,7 @@ class OrdersController extends AppController {
                                 continue;
                             }
                         }
-                    }
+                    }                    
 
                     if (!$product_data) {
                         $status = 0;
@@ -105,8 +104,8 @@ class OrdersController extends AppController {
             } else {
                 $status = 0;
                 $errorMsg = 'Coupon code not match';
-            }
-
+            }    
+           
             if ($status == 1):
 
                 $this->Product->bindModel(array('belongsTo' => array('ProductDescription' => array('foriegnKey' => 'ProductDescription.product_id'))));
@@ -143,13 +142,14 @@ class OrdersController extends AppController {
                     $discount_amount = $coupon_query['Coupon']['discount'];
                 endif;
                 $after_discount_total_cost = $total_cost - (int) $discount_amount;
+                $errorMsg = "Coupon applied successfuly";
             else:
                 $status = 0;
             endif;
         endif;
 
-        $this->set(compact('status', 'errorMsg', 'data', 'total_item', 'total_cost', 'after_discount_total_cost', 'discount_amount'));
-        $this->set('_serialize', array('status', 'errorMsg', 'data', 'total_item', 'total_cost', 'after_discount_total_cost', 'discount_amount'));
+        $this->set(compact('status', 'errorMsg', 'total_item', 'total_cost', 'after_discount_total_cost', 'discount_amount'));
+        $this->set('_serialize', array('status', 'errorMsg', 'total_item', 'total_cost', 'after_discount_total_cost', 'discount_amount'));
     }
 
     public function use_gift_voucher() {
@@ -194,7 +194,7 @@ class OrdersController extends AppController {
      * 
      * */
 
-    public function convert_currency($value = null, $from = 2, $to = 5) {
+    public function convert_currency($value = null, $from = 2, $to = 5, $ret = false) {
         $status = 0;
         $errorMsg = '';
         $price = '';
@@ -205,6 +205,9 @@ class OrdersController extends AppController {
             $status = 1;
             $errorMsg = 'Price converted successfully';
             $price = $converted_value;
+            if($ret):
+                return $price;
+            endif;
         else:
             $status = 2;
             $errorMsg = 'Parameters are not sufficient';
@@ -223,7 +226,7 @@ class OrdersController extends AppController {
 
             $this->Product->bindModel(array('belongsTo' => array('ProductDescription' => array('foriegnKey' => 'product_id'))));
             $this->Cart->bindModel(array('belongsTo' => array('Product' => array('foriegnKey' => 'product_id'))));
-            $cart_data = $this->Cart->find('all', array('recursive' => 2, 'conditions' => array('Cart.customer_id' => $_REQUEST['customer_id'], 'Cart.session_id' => $_REQUEST['session_id'])));
+            $cart_data = $this->Cart->find('all', array('recursive' => 2, 'conditions' => array('Cart.customer_id' => @$_REQUEST['customer_id'], 'Cart.session_id' => $_REQUEST['session_id'])));
 //            pr($cart_data);die;
 //            pr($cart_data);
 //            die;
@@ -233,15 +236,15 @@ class OrdersController extends AppController {
             $order_data['store_id'] = '0'; //need to make dynamic  // fix 0
             $order_data['store_name'] = 'Snacks'; //need to make dynamic
             $order_data['store_url'] = 'http://mysnacky.com/'; //need to make dynamic
-            $order_data['customer_id'] = $_REQUEST['customer_id'];
             $order_data['customer_group_id'] = '1'; //need to make dynamic
             if (isset($_REQUEST['guest']) && $_REQUEST['guest'] == '1'):
                 $order_data['firstname'] = $_REQUEST['payment_firstname'];
                 $order_data['lastname'] = $_REQUEST['payment_lastname'];
                 $order_data['email'] = $_REQUEST['payment_email'];
                 $order_data['telephone'] = $_REQUEST['payment_email'];
-                $order_data['fax'] = $_REQUEST['fax'];
+                $order_data['fax'] = $_REQUEST['payment_fax'];
             else:
+                $order_data['customer_id'] = $_REQUEST['customer_id'];
                 $order_data['firstname'] = $customer_data['Customer']['firstname'];
                 $order_data['lastname'] = $customer_data['Customer']['lastname'];
                 $order_data['email'] = $customer_data['Customer']['email'];
@@ -282,11 +285,18 @@ class OrdersController extends AppController {
 
             //other field
             $order_data['comment'] = $_REQUEST['comment'];
-            $order_data['total'] = $_REQUEST['total'];
+            if($_REQUEST['payment_code'] == 'pp_express'):
+                $order_data['total'] = $this->convert_currency($_REQUEST['total'], $from = 2, $to = 5, $ret = true);
+                $order_data['currency_code'] = 'USD'; //need to make dynamic
+                $data['amount'] = $order_data['total'];
+            else:
+                $order_data['total'] = $_REQUEST['total'];
+                $order_data['currency_code'] = 'INR'; //need to make dynamic               
+                $data['amount'] = $_REQUEST['total'];
+            endif;
             $order_data['order_status_id'] = 5; //need to make dynamic
             $order_data['language_id'] = 1; //need to make dynamic
             $order_data['currency_id'] = 2; //need to make dynamic
-            $order_data['currency_code'] = 'INR'; //need to make dynamic
             $order_data['currency_value'] = 1.0000000; //need to make dynamic
 
             $this->Order->set($order_data);
@@ -391,9 +401,14 @@ class OrdersController extends AppController {
 //$return_array["TXNTYPE"] = "";
 //$return_array["REFUNDAMT"] = "";
         unset($return_array["CHECKSUMHASH"]);
-
-        echo $encoded_json = htmlentities(json_encode($return_array));
-        die();
+        if(!empty($return_array)):
+            $data['is_valid_chsm'] = $return_array['IS_CHECKSUM_VALID'];
+        endif;
+        $status = 1;
+        $errorMsg = 'success';                
+        $this->set(compact('status', 'errorMsg', 'data'));
+        $this->set('_serialize', array('status', 'errorMsg', 'data'));
+       
     }
 
 }

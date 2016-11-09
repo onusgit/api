@@ -96,6 +96,62 @@ class ProductsController extends AppController {
         $this->set(compact('status', 'errorMsg', 'min_price', 'max_price', 'total_products', 'total_page', 'data', 'tags', 'availability'));
         $this->set('_serialize', array('status', 'errorMsg', 'min_price', 'max_price', 'tags', 'availability', 'total_products', 'total_page', 'data'));
     }
+    
+    public function search_product() {
+        $status = 0;
+        $errorMsg = '';
+        $data = [];        
+        $order = [];        
+        if (isset($_REQUEST['q']) && !empty($_REQUEST['q'])):                       
+            $this->Product->bindModel(array(
+                'belongsTo' => array( 
+                    'StockStatus' => array('foreignKey' => FALSE, 'conditions' => array('StockStatus.stock_status_id = Product.stock_status_id')),                    
+                )
+            ));
+            $this->ProductDescription->bindModel(array(
+                'belongsTo' => array(                     
+                    'Product' => array('foreignKey' => FALSE, 'conditions' => array('ProductDescription.product_id = Product.product_id')),                    
+                )
+            ));
+            $page = isset($this->request->query['page']) ? $this->request->query['page'] : 0;
+            $limit = 10;
+            $offset = ($page) * $limit;
+            $product_data = $this->ProductDescription->find('all', array('recursive' => 2, 'conditions' => array('ProductDescription.name like' => "%".$_REQUEST['q']."%"), 'order' => $order, 'limit' => $limit, 'offset' => $offset));           
+            $total_product = $this->ProductDescription->find('first', array('fields' => array('COUNT(ProductDescription.product_id) AS total_product'), 'conditions' => array('ProductDescription.name like' => "%".$_REQUEST['q']."%")));           
+            if (!empty($product_data)):
+                $status = 1;
+                foreach ($product_data as $k => $pr_data):
+                    $data[$k]['id'] = $pr_data['Product']['product_id'];
+                    $data[$k]['name'] = $pr_data['ProductDescription']['name'];
+                    $data[$k]['description'] = html_entity_decode($pr_data['ProductDescription']['description']);
+                    $data[$k]['quantity'] = $pr_data['Product']['quantity'];
+                    $data[$k]['price'] = number_format($pr_data['Product']['price'], 2);
+                    $data[$k]['sku'] = $pr_data['Product']['sku'];
+                    $data[$k]['model'] = $pr_data['Product']['model'];
+                    $data[$k]['viewed'] = $pr_data['Product']['viewed'];
+                    if (!empty($pr_data['Product']['image'])):
+                        $data[$k]['image'] = FULL_BASE_URL . '/image/' . str_replace(' ', '%20', $pr_data['Product']['image']);
+                    else:
+                        $data[$k]['image'] = '';
+                    endif;
+                    $data[$k]['minimum'] = $pr_data['Product']['minimum'];
+                    $data[$k]['shipping'] = $pr_data['Product']['shipping'];
+                    $data[$k]['stock_status'] ="";
+                    if(isset($pr_data['Product']['StockStatus']) && !empty($pr_data['Product']['StockStatus'])):
+                        $data[$k]['stock_status'] = $pr_data['Product']['StockStatus']['name'];
+                    endif;
+                endforeach;
+            endif;
+
+           
+            $total_products = $total_product[0]['total_product'];
+            $total_page = ceil($total_products / $limit);           
+        else:
+            $errorMsg = 'please pass category';
+        endif;
+        $this->set(compact('status', 'errorMsg', 'total_products', 'total_page', 'data'));
+        $this->set('_serialize', array('status', 'errorMsg', 'total_products', 'total_page', 'data'));
+    }
 
     public function product_detail() {
         $status = 0;
